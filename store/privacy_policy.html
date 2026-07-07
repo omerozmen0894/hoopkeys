@@ -3,41 +3,287 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hoop Keys Gizlilik Politikasi</title>
+  <title>Hoop Keys Privacy Policy</title>
+  <meta name="description" content="Hoop Keys privacy policy for App Store and Google Play.">
   <style>
-    body { font-family: Arial, sans-serif; max-width: 860px; margin: 40px auto; padding: 0 18px; line-height: 1.6; color: #16202a; }
-    h1, h2 { color: #0b2926; }
+    :root {
+      color-scheme: light;
+      --bg: #f6f3ed;
+      --paper: #fffdf8;
+      --ink: #171b22;
+      --muted: #5d6470;
+      --line: #ded7cb;
+      --accent: #0f6b5f;
+      --accent-2: #d78522;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(215, 133, 34, .18), transparent 34rem),
+        linear-gradient(180deg, #faf7f1 0%, var(--bg) 100%);
+      color: var(--ink);
+      line-height: 1.65;
+    }
+
+    main {
+      width: min(920px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 40px 0 56px;
+    }
+
+    article {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 18px 48px rgba(38, 28, 16, .12);
+      overflow: hidden;
+    }
+
+    header {
+      padding: 34px 34px 24px;
+      background: linear-gradient(135deg, #102522 0%, #193a35 56%, #5d3b1d 100%);
+      color: white;
+    }
+
+    header p {
+      margin: 8px 0 0;
+      color: rgba(255, 255, 255, .78);
+    }
+
+    h1, h2, h3 { line-height: 1.2; }
+    h1 { margin: 0; font-size: clamp(32px, 5vw, 48px); letter-spacing: 0; }
+    h2 { margin: 34px 0 12px; font-size: 24px; color: var(--accent); }
+    h3 { margin: 24px 0 8px; font-size: 18px; }
+
+    section { padding: 0 34px; }
+    section:first-of-type { padding-top: 8px; }
+    section:last-of-type { padding-bottom: 34px; }
+
+    p { margin: 0 0 14px; }
+    ul { margin: 0 0 16px 22px; padding: 0; }
+    li { margin: 7px 0; }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .pill {
+      border: 1px solid rgba(255, 255, 255, .26);
+      border-radius: 999px;
+      padding: 7px 12px;
+      color: rgba(255, 255, 255, .9);
+      font-size: 14px;
+    }
+
+    .note {
+      border-left: 4px solid var(--accent-2);
+      background: #fff5e7;
+      padding: 14px 16px;
+      border-radius: 8px;
+      color: #3e2d18;
+      margin: 18px 0;
+    }
+
+    a { color: var(--accent); font-weight: 650; }
+
+    hr {
+      border: 0;
+      border-top: 1px solid var(--line);
+      margin: 34px;
+    }
+
+    .muted { color: var(--muted); }
+
+    @media (max-width: 640px) {
+      main { width: 100%; padding: 0; }
+      article { border-radius: 0; border-left: 0; border-right: 0; }
+      header, section { padding-left: 22px; padding-right: 22px; }
+      hr { margin-left: 22px; margin-right: 22px; }
+    }
   </style>
 </head>
 <body>
-  <h1>Hoop Keys Gizlilik Politikasi</h1>
-  <p>Son guncelleme: 26 Haziran 2026</p>
-  <p>Hoop Keys, kullanici girisi, ilerleme kaydi, oyun ici ekonomi ve siralama ozellikleri icin Firebase hizmetlerini kullanir.</p>
+  <main>
+    <article>
+      <header>
+        <h1>Hoop Keys Privacy Policy</h1>
+        <p>Hoop Keys gizlilik politikasi / privacy policy.</p>
+        <div class="meta">
+          <span class="pill">Last updated: July 7, 2026</span>
+          <span class="pill">App: Hoop Keys</span>
+          <span class="pill">Bundle ID: com.omergames.hoopkeys</span>
+        </div>
+      </header>
 
-  <h2>Toplanan Veriler</h2>
-  <ul>
-    <li>Email adresi: email/sifre ile giris ve sifre sifirlama icin.</li>
-    <li>Oyuncu adi: profil ve siralama ekraninda gostermek icin.</li>
-    <li>Kullanici kimligi: ilerleme, skor ve coin verisini ayri tutmak icin.</li>
-    <li>Oyun ilerlemesi: acilan bolum, coin, premium durumu ve skorlar.</li>
-    <li>Sira verileri: skor, bolum adi, hamle sayisi ve sure.</li>
-  </ul>
-  <p>Misafir girisinde email istenmez; ancak ilerlemeyi ayri tutmak icin anonim kullanici kimligi olusturulur.</p>
+      <section lang="tr">
+        <h2>Gizlilik Politikasi</h2>
+        <p>
+          Hoop Keys, basket ve bulmaca deneyimini sunan bir mobil oyundur. Bu politika,
+          uygulamada hangi verilerin islenebilecegini, bu verilerin hangi amaclarla
+          kullanildigini ve kullanicilarin bize nasil ulasabilecegini aciklar.
+        </p>
 
-  <h2>Verilerin Kullanimi</h2>
-  <p>Veriler hesap olusturma, giris, sifre sifirlama, oyuncu ilerlemesini kaydetme, siralama olusturma ve cok oyunculu arena odalarini calistirma amaclariyla kullanilir.</p>
+        <h3>Toplanan veya Islenen Veriler</h3>
+        <ul>
+          <li><strong>E-posta adresi:</strong> E-posta/sifre ile giris, hesap olusturma ve sifre sifirlama icin kullanilir.</li>
+          <li><strong>Kullanici kimligi:</strong> Oyuncu ilerlemesini, skorlarini, coin ve oyun ici durumunu dogru hesaba baglamak icin kullanilir.</li>
+          <li><strong>Oyuncu adi:</strong> Profil ve liderlik tablolarinda gosterilebilir.</li>
+          <li><strong>Oyun ilerlemesi:</strong> Acilan bolumler, skorlar, sure, hamle sayisi, coin, joker ve benzeri oyun ici bilgiler saklanabilir.</li>
+          <li><strong>Liderlik tablosu verileri:</strong> Gunluk, haftalik, aylik ve genel siralamalar icin skor ve performans bilgileri kullanilabilir.</li>
+        </ul>
 
-  <h2>Ucuncu Taraf Hizmetler</h2>
-  <p>Uygulama Firebase Authentication ve Cloud Firestore kullanir. Bu hizmetler Google tarafindan saglanir.</p>
+        <p>
+          Misafir girisinde e-posta adresi istenmez. Ancak ilerlemenin karismamasi icin
+          anonim veya cihaz/oturumla iliskili bir kullanici kimligi olusturulabilir.
+        </p>
 
-  <h2>Reklam ve Takip</h2>
-  <p>Bu surumde reklam SDK'si veya kullaniciyi farkli uygulama/sitelerde takip eden bir izleme sistemi bulunmaz.</p>
+        <h3>Veriler Neden Kullanilir?</h3>
+        <ul>
+          <li>Hesap olusturma, giris ve sifre sifirlama islemlerini calistirmak.</li>
+          <li>Oyuncunun kaldigi yerden devam edebilmesini saglamak.</li>
+          <li>Skor, bolum ilerlemesi, coin ve joker gibi oyun verilerini saklamak.</li>
+          <li>Liderlik tablolari ve rekabet ozelliklerini sunmak.</li>
+          <li>Hata ayiklama, guvenlik ve uygulama hizmetlerinin surekliligini saglamak.</li>
+        </ul>
 
-  <h2>Veri Silme</h2>
-  <p>Hesap veya veri silme talepleri icin destek adresinden iletisime gecilebilir: omer.games.support@example.com</p>
+        <h3>Ucuncu Taraf Hizmetler</h3>
+        <p>
+          Hoop Keys, kimlik dogrulama ve bulut veri saklama icin Google Firebase
+          hizmetlerini kullanabilir. Bu hizmetler Firebase Authentication ve Cloud
+          Firestore gibi urunleri icerebilir. Firebase tarafindan islenen veriler
+          Google'in ilgili gizlilik ve guvenlik sartlarina tabidir.
+        </p>
 
-  <h2>Iletisim</h2>
-  <p>Gizlilik politikasi hakkinda sorular icin: omer.games.support@example.com</p>
+        <h3>Reklam, Takip ve Cocuklar</h3>
+        <p>
+          Bu surumde kullaniciyi farkli uygulama ve web sitelerinde takip eden bir
+          reklam takip sistemi kullanilmaz. Uygulama cocuklara ozel olarak hedeflenmez.
+        </p>
+
+        <h3>Uygulama Ici Satin Almalar</h3>
+        <p>
+          Uygulamada ileride premium ozellikler, coin veya benzeri dijital icerikler
+          sunulursa odeme islemleri Apple App Store veya Google Play tarafindan
+          islenir. Hoop Keys kredi karti veya odeme karti bilgilerini dogrudan toplamaz.
+        </p>
+
+        <h3>Veri Paylasimi</h3>
+        <p>
+          Veriler, uygulamanin calismasi icin gerekli servis saglayicilari disinda
+          reklam aglari veya ucuncu taraf takip sirketleriyle satilmaz ya da
+          pazarlama amaciyla paylasilmaz.
+        </p>
+
+        <h3>Veri Guvenligi</h3>
+        <p>
+          Uygulama ile sunucu hizmetleri arasindaki iletisim, hizmet saglayicilarin
+          sundugu guvenli baglanti yontemleri uzerinden gerceklesir. Buna ragmen
+          internet uzerinden iletilen hicbir veri icin mutlak guvenlik garanti edilemez.
+        </p>
+
+        <h3>Veri Silme Talepleri</h3>
+        <p>
+          Hesap veya veri silme talebi icin bizimle iletisime gecebilirsiniz:
+          <a href="mailto:t9367941@gmail.com">t9367941@gmail.com</a>
+        </p>
+
+        <h3>Iletisim</h3>
+        <p>
+          Gizlilik politikasi hakkinda sorular icin:
+          <a href="mailto:t9367941@gmail.com">t9367941@gmail.com</a>
+        </p>
+      </section>
+
+      <hr>
+
+      <section lang="en">
+        <h2>Privacy Policy</h2>
+        <p>
+          Hoop Keys is a mobile puzzle and basketball game. This policy explains what
+          information may be processed by the app, why it is used, and how users can
+          contact us.
+        </p>
+
+        <h3>Information We May Process</h3>
+        <ul>
+          <li><strong>Email address:</strong> Used for email/password sign-in, account creation, and password reset.</li>
+          <li><strong>User ID:</strong> Used to keep each player's progress, scores, coins, and game state separate.</li>
+          <li><strong>Player name:</strong> May be shown on profile and leaderboard screens.</li>
+          <li><strong>Gameplay progress:</strong> Levels, scores, time, move count, coins, boosters, and similar in-game data may be stored.</li>
+          <li><strong>Leaderboard data:</strong> Score and performance information may be used for daily, weekly, monthly, and overall rankings.</li>
+        </ul>
+
+        <p>
+          Guest sign-in does not require an email address. However, an anonymous or
+          session-based user ID may be created to keep progress separate.
+        </p>
+
+        <h3>How We Use Information</h3>
+        <ul>
+          <li>To provide account creation, sign-in, and password reset features.</li>
+          <li>To let players continue from their saved progress.</li>
+          <li>To store game progress, scores, coins, and boosters.</li>
+          <li>To provide leaderboard and competitive features.</li>
+          <li>To maintain security, debugging, and service reliability.</li>
+        </ul>
+
+        <h3>Third-Party Services</h3>
+        <p>
+          Hoop Keys may use Google Firebase services for authentication and cloud data
+          storage, including Firebase Authentication and Cloud Firestore. Data processed
+          by Firebase is subject to Google's applicable privacy and security terms.
+        </p>
+
+        <h3>Advertising, Tracking, and Children</h3>
+        <p>
+          This version does not use an advertising tracking system that tracks users
+          across other apps and websites. The app is not specifically directed to children.
+        </p>
+
+        <h3>In-App Purchases</h3>
+        <p>
+          If premium features, coins, or similar digital content are offered, payments
+          are processed by Apple App Store or Google Play. Hoop Keys does not directly
+          collect credit card or payment card information.
+        </p>
+
+        <h3>Data Sharing</h3>
+        <p>
+          Data is not sold to advertising networks or third-party tracking companies.
+          It may be processed by service providers only as needed to operate the app.
+        </p>
+
+        <h3>Data Security</h3>
+        <p>
+          Communication with backend services is performed using secure connection
+          methods provided by the service providers. However, no method of transmission
+          over the internet can be guaranteed to be completely secure.
+        </p>
+
+        <h3>Data Deletion Requests</h3>
+        <p>
+          To request account or data deletion, contact us at
+          <a href="mailto:t9367941@gmail.com">t9367941@gmail.com</a>.
+        </p>
+
+        <h3>Contact</h3>
+        <p>
+          For questions about this privacy policy, contact:
+          <a href="mailto:t9367941@gmail.com">t9367941@gmail.com</a>
+        </p>
+
+        <p class="note">
+          This page is intended for App Store Connect, Google Play, and general user access.
+        </p>
+      </section>
+    </article>
+  </main>
 </body>
 </html>
-
