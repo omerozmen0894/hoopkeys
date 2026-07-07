@@ -45,12 +45,12 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'YOUR_API_KEY',
-    appId: 'YOUR_IOS_APP_ID',
-    messagingSenderId: 'YOUR_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
-    storageBucket: 'YOUR_PROJECT_ID.appspot.com',
-    iosBundleId: 'com.example.tapDropArena',
+    apiKey: 'AIzaSyDcRWzYgU405CJnz6uVwsSZjcx52ipgBdk',
+    appId: '1:931838852481:ios:9fa6955e5b590f774fbc80',
+    messagingSenderId: '931838852481',
+    projectId: 'hoop-keys',
+    storageBucket: 'hoop-keys.firebasestorage.app',
+    iosBundleId: 'com.omergames.hoopkeys',
   );
 
   static const FirebaseOptions macos = ios;
