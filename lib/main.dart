@@ -2975,6 +2975,7 @@ class AccountScreen extends StatefulWidget {
 
 class _AccountScreenState extends State<AccountScreen> {
   late final TextEditingController _name;
+  bool _deletingAccount = false;
 
   @override
   void initState() {
@@ -2997,6 +2998,106 @@ class _AccountScreenState extends State<AccountScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Oyuncu adi guncellendi.')));
+  }
+
+  Future<void> _deleteAccount() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || _deletingAccount) return;
+    final password = await _confirmDeleteAccount(user);
+    if (password == null) return;
+    setState(() => _deletingAccount = true);
+    try {
+      if (!user.isAnonymous && (user.email ?? '').isNotEmpty) {
+        final credential = EmailAuthProvider.credential(
+          email: user.email!,
+          password: password,
+        );
+        await user.reauthenticateWithCredential(credential);
+      }
+      await widget.backend.deleteAccountData(user.uid);
+      await user.delete();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Hesap ve oyun verileri silindi.')),
+      );
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      final message = switch (error.code) {
+        'wrong-password' => 'Sifre hatali. Tekrar deneyebilirsin.',
+        'invalid-credential' => 'Giris bilgisi dogrulanamadi.',
+        'requires-recent-login' =>
+          'Guvenlik icin tekrar giris yapip hesap silmeyi yeniden dene.',
+        _ => AuthCopy.message(error),
+      };
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Hesap silinemedi. Baglantini kontrol edip tekrar dene.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _deletingAccount = false);
+    }
+  }
+
+  Future<String?> _confirmDeleteAccount(User user) async {
+    final password = TextEditingController();
+    final needsPassword = !user.isAnonymous && (user.email ?? '').isNotEmpty;
+    try {
+      return showDialog<String?>(
+        context: context,
+        barrierDismissible: !_deletingAccount,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('Hesabi sil'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Hesabin, kayitli ilerlemen, coinlerin ve siralama verilerin silinecek. Bu islem geri alinamaz.',
+                ),
+                if (needsPassword) ...[
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: password,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Sifren',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(null),
+                child: const Text('Vazgec'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xffb3261e),
+                ),
+                onPressed: () {
+                  if (needsPassword && password.text.isEmpty) return;
+                  Navigator.of(context).pop(password.text);
+                },
+                child: const Text('Kalici Olarak Sil'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      password.dispose();
+    }
   }
 
   @override
@@ -3045,6 +3146,38 @@ class _AccountScreenState extends State<AccountScreen> {
           onPressed: () => FirebaseAuth.instance.signOut(),
           icon: const Icon(Icons.logout),
           label: const Text('Cikis Yap'),
+        ),
+        const SizedBox(height: 18),
+        const Divider(),
+        const SizedBox(height: 8),
+        Text(
+          'Tehlikeli alan',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: const Color(0xffffb4ab),
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Hesabini silersen ilerlemen, coinlerin ve siralama verilerin kalici olarak kaldirilir.',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: _deletingAccount ? null : _deleteAccount,
+          icon:
+              _deletingAccount
+                  ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                  : const Icon(Icons.delete_forever_outlined),
+          label: Text(_deletingAccount ? 'Siliniyor...' : 'Hesabimi Sil'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xffffb4ab),
+            side: const BorderSide(color: Color(0xffb3261e)),
+          ),
         ),
       ],
     );
@@ -5447,6 +5580,46 @@ class GameBackend {
       'email': FirebaseAuth.instance.currentUser?.email,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+  }
+
+  Future<void> deleteAccountData(String uid) async {
+    final prefs = await SharedPreferences.getInstance();
+    await Future.wait([
+      prefs.remove('unlocked_$uid'),
+      prefs.remove('coins_$uid'),
+      prefs.remove('premium_$uid'),
+      prefs.remove('route_jokers_$uid'),
+      prefs.remove('breaker_jokers_$uid'),
+      prefs.remove('key_jokers_$uid'),
+    ]);
+    if (!_ready) return;
+    final firestore = FirebaseFirestore.instance;
+    await _deleteQuery(
+      firestore.collection('leaderboard').where('uid', isEqualTo: uid),
+    );
+    await _deleteQuery(
+      firestore.collectionGroup('entries').where('uid', isEqualTo: uid),
+    );
+    await _deleteQuery(
+      firestore.collection('arenaRooms').where('hostUid', isEqualTo: uid),
+    );
+    await _deleteQuery(
+      firestore.collection('arenaRooms').where('guestUid', isEqualTo: uid),
+    );
+    await firestore.collection('users').doc(uid).delete();
+  }
+
+  Future<void> _deleteQuery(Query<Map<String, dynamic>> query) async {
+    while (true) {
+      final snapshot = await query.limit(450).get();
+      if (snapshot.docs.isEmpty) return;
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+      if (snapshot.docs.length < 450) return;
+    }
   }
 
   Future<void> submitScore({

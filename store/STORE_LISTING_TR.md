@@ -33,5 +33,4 @@ Oyun / Arcade
 Siddet, kumar, yetiskin icerik veya kullanici tarafindan olusturulan acik icerik yoktur.
 
 ## Destek E-posta
-omer.games.support@example.com
-
+t9367941@gmail.com

@@ -35,11 +35,14 @@ Bu surumde reklam SDK'si veya kullaniciyi farkli uygulama/sitelerde takip eden b
 
 ## Veri Silme
 
-Hesap veya veri silme talepleri icin destek adresinden iletisime gecilebilir:
-omer.games.support@example.com
+Kullanici, Hesap ekranindan hesabini silebilir. Bu islem hesap bilgilerini,
+oyun ilerlemesini, coin/joker durumunu ve ilgili siralama verilerini kalici
+olarak siler.
+
+Yardim veya ek veri silme talepleri icin destek adresinden iletisime gecilebilir:
+t9367941@gmail.com
 
 ## Iletisim
 
 Gizlilik politikasi hakkinda sorular icin:
-omer.games.support@example.com
-
+t9367941@gmail.com

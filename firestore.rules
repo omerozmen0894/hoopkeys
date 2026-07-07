@@ -14,8 +14,10 @@ service cloud.firestore {
       allow read: if owns(uid);
       allow create, update: if owns(uid)
         && request.resource.data.keys().hasOnly([
-          'name', 'email', 'unlockedLevelIndex', 'coins', 'premium', 'updatedAt'
+          'name', 'email', 'unlockedLevelIndex', 'coins', 'premium',
+          'routeJokers', 'breakerJokers', 'keyJokers', 'updatedAt'
         ]);
+      allow delete: if owns(uid);
     }
 
     match /leaderboard/{entryId} {
@@ -31,6 +33,7 @@ service cloud.firestore {
         && request.resource.data.moves is int
         && request.resource.data.durationMs is int
         && request.resource.data.period in ['daily', 'weekly', 'monthly'];
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
 
     match /leaderboardGlobal/{bucket}/entries/{entryId} {
@@ -50,6 +53,9 @@ service cloud.firestore {
         && request.resource.data.lastMoves is int
         && request.resource.data.lastDurationMs is int
         && request.resource.data.period in ['daily', 'weekly', 'monthly'];
+      allow delete: if signedIn()
+        && entryId == request.auth.uid
+        && resource.data.uid == request.auth.uid;
     }
 
     match /arenaRooms/{roomId} {
@@ -70,6 +76,11 @@ service cloud.firestore {
           'hostUid', 'hostName', 'guestUid', 'guestName', 'levelIndex',
           'hostScore', 'guestScore', 'createdAt', 'updatedAt'
         ]);
+      allow delete: if signedIn()
+        && (
+          resource.data.hostUid == request.auth.uid
+          || resource.data.guestUid == request.auth.uid
+        );
     }
   }
 }

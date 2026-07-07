@@ -39,10 +39,10 @@ Firebase ile haberlesme HTTPS/TLS uzerinden yapilir.
 
 ## Veri Silme Talebi
 
-Kullanici hesap/veri silme talebi icin destek e-postasina yazabilir:
-omer.games.support@example.com
+Kullanici hesabini uygulama icindeki Hesap ekranindan silebilir. Yardim veya ek
+veri silme talebi icin destek e-postasina yazabilir:
+t9367941@gmail.com
 
 ## Reklam / Tracking
 
 Bu surumde reklam SDK'si, IDFA/AAID takip kullanimi veya farkli uygulamalar arasi takip yoktur.
-
