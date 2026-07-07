@@ -3,15 +3,15 @@ workflows:
     name: Hoop Keys iOS App Store
     max_build_duration: 120
     integrations:
-      app_store_connect: hoop_keys_app_store
+      app_store_connect: codemagic
     environment:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.omergames.hoopkeys
       groups:
-        - appstore_credentials
         - firebase_ios
       vars:
+        BUNDLE_ID: com.omergames.hoopkeys
         XCODE_WORKSPACE: ios/Runner.xcworkspace
         XCODE_SCHEME: Runner
       flutter: stable
@@ -28,6 +28,14 @@ workflows:
             echo "Missing ios/Runner/GoogleService-Info.plist. Add IOS_FIREBASE_PLIST_B64 to the firebase_ios variable group."
             exit 1
           fi
+      - name: Fetch iOS signing files
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+      - name: Set up signing certificate
+        script: |
+          keychain add-certificates
       - name: Set up code signing settings on Xcode project
         script: |
           xcode-project use-profiles
@@ -45,11 +53,10 @@ workflows:
           flutter test
       - name: Build signed IPA
         script: |
-          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" || echo 0)
-          NEXT_BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
+          BUILD_NUMBER=${PROJECT_BUILD_NUMBER:-1}
           flutter build ipa --release \
             --build-name=1.0.0 \
-            --build-number=$NEXT_BUILD_NUMBER \
+            --build-number=$BUILD_NUMBER \
             --export-options-plist=/Users/builder/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
