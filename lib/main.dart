@@ -10,16 +10,41 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'firebase_options.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  final firebaseReady = await GameBackend.boot();
-  runApp(TapDropArenaApp(firebaseReady: firebaseReady));
+  runApp(const TapDropArenaApp());
 }
 
-class TapDropArenaApp extends StatelessWidget {
-  const TapDropArenaApp({super.key, required this.firebaseReady});
+class TapDropArenaApp extends StatefulWidget {
+  const TapDropArenaApp({
+    super.key,
+    bool? firebaseReady,
+    bool? initialFirebaseReady,
+  }) : initialFirebaseReady = initialFirebaseReady ?? firebaseReady;
 
-  final bool firebaseReady;
+  final bool? initialFirebaseReady;
+
+  @override
+  State<TapDropArenaApp> createState() => _TapDropArenaAppState();
+}
+
+class _TapDropArenaAppState extends State<TapDropArenaApp> {
+  late bool _firebaseReady;
+
+  @override
+  void initState() {
+    super.initState();
+    _firebaseReady = widget.initialFirebaseReady ?? false;
+    if (widget.initialFirebaseReady == null) {
+      unawaited(_bootFirebase());
+    }
+  }
+
+  Future<void> _bootFirebase() async {
+    final ready = await GameBackend.boot();
+    if (!mounted) return;
+    setState(() => _firebaseReady = ready);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +59,7 @@ class TapDropArenaApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xff0d1117),
         useMaterial3: true,
       ),
-      home: AuthGate(firebaseReady: firebaseReady),
+      home: AuthGate(firebaseReady: _firebaseReady),
     );
   }
 }
