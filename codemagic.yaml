@@ -1,0 +1,62 @@
+workflows:
+  ios-app-store:
+    name: Hoop Keys iOS App Store
+    max_build_duration: 120
+    integrations:
+      app_store_connect: hoop_keys_app_store
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.omergames.hoopkeys
+      groups:
+        - appstore_credentials
+        - firebase_ios
+      vars:
+        XCODE_WORKSPACE: ios/Runner.xcworkspace
+        XCODE_SCHEME: Runner
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Restore iOS Firebase config
+        script: |
+          if [ -n "$IOS_FIREBASE_PLIST_B64" ]; then
+            echo "$IOS_FIREBASE_PLIST_B64" | base64 --decode > ios/Runner/GoogleService-Info.plist || \
+            echo "$IOS_FIREBASE_PLIST_B64" | base64 -D > ios/Runner/GoogleService-Info.plist
+          fi
+          if [ ! -f ios/Runner/GoogleService-Info.plist ]; then
+            echo "Missing ios/Runner/GoogleService-Info.plist. Add IOS_FIREBASE_PLIST_B64 to the firebase_ios variable group."
+            exit 1
+          fi
+      - name: Set up code signing settings on Xcode project
+        script: |
+          xcode-project use-profiles
+      - name: Get Flutter packages
+        script: |
+          flutter pub get
+      - name: Install CocoaPods
+        script: |
+          find ios -name "Podfile" -execdir pod install \;
+      - name: Flutter analyze
+        script: |
+          flutter analyze
+      - name: Flutter tests
+        script: |
+          flutter test
+      - name: Build signed IPA
+        script: |
+          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" || echo 0)
+          NEXT_BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
+          flutter build ipa --release \
+            --build-name=1.0.0 \
+            --build-number=$NEXT_BUILD_NUMBER \
+            --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - flutter_drive.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false
