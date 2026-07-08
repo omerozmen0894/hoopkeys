@@ -79,10 +79,52 @@ class AuthGate extends StatelessWidget {
       builder: (context, snapshot) {
         final user = snapshot.data;
         if (user == null) return const AuthScreen(firebaseReady: true);
-        return GameShell(key: ValueKey(user.uid), user: user);
+        return GameShell(
+          key: ValueKey(user.uid),
+          player: PlayerProfile.fromFirebase(user),
+        );
       },
     );
   }
+}
+
+class PlayerProfile {
+  const PlayerProfile({
+    required this.uid,
+    required this.name,
+    required this.emailLabel,
+    required this.isAnonymous,
+    required this.isFirebaseBacked,
+  });
+
+  factory PlayerProfile.fromFirebase(User user) {
+    final email = user.email ?? '';
+    final fallbackName = email.split('@').first.trim();
+    return PlayerProfile(
+      uid: user.uid,
+      name:
+          user.displayName ?? (fallbackName.isEmpty ? 'Oyuncu' : fallbackName),
+      emailLabel: user.isAnonymous ? 'Misafir oyuncu' : email,
+      isAnonymous: user.isAnonymous,
+      isFirebaseBacked: true,
+    );
+  }
+
+  factory PlayerProfile.offlineGuest() {
+    return const PlayerProfile(
+      uid: GameBackend.offlineGuestUid,
+      name: 'Misafir',
+      emailLabel: 'Misafir oyuncu',
+      isAnonymous: true,
+      isFirebaseBacked: false,
+    );
+  }
+
+  final String uid;
+  final String name;
+  final String emailLabel;
+  final bool isAnonymous;
+  final bool isFirebaseBacked;
 }
 
 class AuthScreen extends StatefulWidget {
@@ -148,25 +190,35 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _guestLogin() async {
-    if (!widget.firebaseReady) {
-      setState(() => _message = 'Misafir girisi icin Firebase gerekli.');
-      return;
-    }
     setState(() {
       _busy = true;
       _message = null;
     });
     try {
+      if (!widget.firebaseReady) {
+        _openOfflineGuest();
+        return;
+      }
       final credential = await FirebaseAuth.instance.signInAnonymously();
       await credential.user?.updateDisplayName('Misafir');
       await GameBackend().saveProfileName('Misafir');
-    } on FirebaseAuthException catch (error) {
-      setState(() => _message = AuthCopy.message(error));
-    } catch (error) {
-      setState(() => _message = AuthCopy.generic(error));
+    } catch (_) {
+      _openOfflineGuest();
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  void _openOfflineGuest() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder:
+            (_) => GameShell(
+              key: const ValueKey(GameBackend.offlineGuestUid),
+              player: PlayerProfile.offlineGuest(),
+            ),
+      ),
+    );
   }
 
   Future<void> _resetPassword() async {
@@ -452,9 +504,9 @@ class AuthStatPill extends StatelessWidget {
 }
 
 class GameShell extends StatefulWidget {
-  const GameShell({super.key, required this.user});
+  const GameShell({super.key, required this.player});
 
-  final User user;
+  final PlayerProfile player;
 
   @override
   State<GameShell> createState() => _GameShellState();
@@ -475,19 +527,14 @@ class _GameShellState extends State<GameShell> {
   @override
   void initState() {
     super.initState();
-    _playerName = widget.user.displayName ?? _nameFromEmail(widget.user.email);
+    _playerName = widget.player.name;
     _loadProgress();
     _loadEconomy();
   }
 
-  String _nameFromEmail(String? email) {
-    final value = email?.split('@').first.trim();
-    return value == null || value.isEmpty ? 'Oyuncu' : value;
-  }
-
   Future<void> _loadProgress() async {
     final progress = (await _backend.loadProgress(
-      widget.user.uid,
+      widget.player.uid,
     )).clamp(0, GameLevel.samples.length - 1);
     if (!mounted) return;
     setState(() {
@@ -497,7 +544,7 @@ class _GameShellState extends State<GameShell> {
   }
 
   Future<void> _loadEconomy() async {
-    final economy = await _backend.loadEconomy(widget.user.uid);
+    final economy = await _backend.loadEconomy(widget.player.uid);
     if (!mounted) return;
     setState(() {
       _coins = economy.coins;
@@ -511,7 +558,7 @@ class _GameShellState extends State<GameShell> {
   Future<void> _unlockNext(int finishedLevel) async {
     final next = math.min(finishedLevel + 1, GameLevel.samples.length - 1);
     if (next <= _unlockedLevelIndex) return;
-    await _backend.saveProgress(widget.user.uid, next);
+    await _backend.saveProgress(widget.player.uid, next);
     if (mounted) setState(() => _unlockedLevelIndex = next);
   }
 
@@ -519,7 +566,7 @@ class _GameShellState extends State<GameShell> {
     final reward = _premium ? value * 2 : value;
     final coins = _coins + reward;
     await _backend.saveEconomy(
-      widget.user.uid,
+      widget.player.uid,
       coins: coins,
       premium: _premium,
       routeJokers: _routeJokers,
@@ -531,7 +578,7 @@ class _GameShellState extends State<GameShell> {
 
   Future<void> _activatePremium() async {
     await _backend.saveEconomy(
-      widget.user.uid,
+      widget.player.uid,
       coins: _coins,
       premium: true,
       routeJokers: _routeJokers,
@@ -554,7 +601,7 @@ class _GameShellState extends State<GameShell> {
     unawaited(
       _backend
           .saveEconomy(
-            widget.user.uid,
+            widget.player.uid,
             coins: _coins,
             premium: _premium,
             routeJokers: route,
@@ -630,16 +677,28 @@ class _GameShellState extends State<GameShell> {
               AccountScreen(
                 backend: _backend,
                 playerName: _playerName,
-                email:
-                    widget.user.isAnonymous
-                        ? 'Misafir oyuncu'
-                        : widget.user.email ?? '',
+                email: widget.player.emailLabel,
+                canDeleteAccount: widget.player.isFirebaseBacked,
+                onSignOut: () => _signOut(context),
                 onChanged: (value) => setState(() => _playerName = value),
                 onBack: goMenu,
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Future<void> _signOut(BuildContext context) async {
+    if (widget.player.isFirebaseBacked) {
+      await FirebaseAuth.instance.signOut();
+      return;
+    }
+    if (!context.mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => AuthGate(firebaseReady: Firebase.apps.isNotEmpty),
       ),
     );
   }
@@ -2984,6 +3043,8 @@ class AccountScreen extends StatefulWidget {
     required this.backend,
     required this.playerName,
     required this.email,
+    required this.canDeleteAccount,
+    required this.onSignOut,
     required this.onChanged,
     required this.onBack,
   });
@@ -2991,6 +3052,8 @@ class AccountScreen extends StatefulWidget {
   final GameBackend backend;
   final String playerName;
   final String email;
+  final bool canDeleteAccount;
+  final Future<void> Function() onSignOut;
   final ValueChanged<String> onChanged;
   final VoidCallback onBack;
 
@@ -3168,42 +3231,44 @@ class _AccountScreenState extends State<AccountScreen> {
         ),
         const SizedBox(height: 8),
         OutlinedButton.icon(
-          onPressed: () => FirebaseAuth.instance.signOut(),
+          onPressed: widget.onSignOut,
           icon: const Icon(Icons.logout),
           label: const Text('Cikis Yap'),
         ),
-        const SizedBox(height: 18),
-        const Divider(),
-        const SizedBox(height: 8),
-        Text(
-          'Tehlikeli alan',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: const Color(0xffffb4ab),
-            fontWeight: FontWeight.w800,
+        if (widget.canDeleteAccount) ...[
+          const SizedBox(height: 18),
+          const Divider(),
+          const SizedBox(height: 8),
+          Text(
+            'Tehlikeli alan',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: const Color(0xffffb4ab),
+              fontWeight: FontWeight.w800,
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Hesabini silersen ilerlemen, coinlerin ve siralama verilerin kalici olarak kaldirilir.',
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: _deletingAccount ? null : _deleteAccount,
-          icon:
-              _deletingAccount
-                  ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                  : const Icon(Icons.delete_forever_outlined),
-          label: Text(_deletingAccount ? 'Siliniyor...' : 'Hesabimi Sil'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: const Color(0xffffb4ab),
-            side: const BorderSide(color: Color(0xffb3261e)),
+          const SizedBox(height: 8),
+          Text(
+            'Hesabini silersen ilerlemen, coinlerin ve siralama verilerin kalici olarak kaldirilir.',
+            style: Theme.of(context).textTheme.bodyMedium,
           ),
-        ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _deletingAccount ? null : _deleteAccount,
+            icon:
+                _deletingAccount
+                    ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : const Icon(Icons.delete_forever_outlined),
+            label: Text(_deletingAccount ? 'Siliniyor...' : 'Hesabimi Sil'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xffffb4ab),
+              side: const BorderSide(color: Color(0xffb3261e)),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -5480,6 +5545,7 @@ class GameObstacle {
 }
 
 class GameBackend {
+  static const offlineGuestUid = 'offline_guest';
   static bool _ready = false;
 
   static Future<bool> boot() async {
@@ -5496,13 +5562,20 @@ class GameBackend {
     }
   }
 
-  String get uid => FirebaseAuth.instance.currentUser?.uid ?? 'offline';
+  String get uid => FirebaseAuth.instance.currentUser?.uid ?? offlineGuestUid;
   bool get ready => _ready;
+
+  bool _canSync([String? targetUid]) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (!_ready || user == null) return false;
+    if (targetUid != null && targetUid != user.uid) return false;
+    return true;
+  }
 
   Future<int> loadProgress(String uid) async {
     final prefs = await SharedPreferences.getInstance();
     final local = prefs.getInt('unlocked_$uid') ?? 0;
-    if (!_ready) return local;
+    if (!_canSync(uid)) return local;
     try {
       final doc =
           await FirebaseFirestore.instance.collection('users').doc(uid).get();
@@ -5518,7 +5591,7 @@ class GameBackend {
   Future<void> saveProgress(String uid, int unlockedLevelIndex) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('unlocked_$uid', unlockedLevelIndex);
-    if (!_ready) return;
+    if (!_canSync(uid)) return;
     await FirebaseFirestore.instance.collection('users').doc(uid).set({
       'unlockedLevelIndex': unlockedLevelIndex,
       'updatedAt': FieldValue.serverTimestamp(),
@@ -5532,7 +5605,7 @@ class GameBackend {
     final localRouteJokers = prefs.getInt('route_jokers_$uid') ?? 3;
     final localBreakerJokers = prefs.getInt('breaker_jokers_$uid') ?? 3;
     final localKeyJokers = prefs.getInt('key_jokers_$uid') ?? 3;
-    if (!_ready) {
+    if (!_canSync(uid)) {
       return GameEconomy(
         coins: localCoins,
         premium: localPremium,
@@ -5587,7 +5660,7 @@ class GameBackend {
     await prefs.setInt('route_jokers_$uid', routeJokers);
     await prefs.setInt('breaker_jokers_$uid', breakerJokers);
     await prefs.setInt('key_jokers_$uid', keyJokers);
-    if (!_ready) return;
+    if (!_canSync(uid)) return;
     await FirebaseFirestore.instance.collection('users').doc(uid).set({
       'coins': coins,
       'premium': premium,
@@ -5599,7 +5672,7 @@ class GameBackend {
   }
 
   Future<void> saveProfileName(String name) async {
-    if (!_ready) return;
+    if (!_canSync()) return;
     await FirebaseFirestore.instance.collection('users').doc(uid).set({
       'name': name,
       'email': FirebaseAuth.instance.currentUser?.email,
@@ -5617,7 +5690,7 @@ class GameBackend {
       prefs.remove('breaker_jokers_$uid'),
       prefs.remove('key_jokers_$uid'),
     ]);
-    if (!_ready) return;
+    if (!_canSync(uid)) return;
     final firestore = FirebaseFirestore.instance;
     await _deleteQuery(
       firestore.collection('leaderboard').where('uid', isEqualTo: uid),
@@ -5655,7 +5728,7 @@ class GameBackend {
     required int moves,
     required int durationMs,
   }) async {
-    if (!_ready) return;
+    if (!_canSync()) return;
     final batch = FirebaseFirestore.instance.batch();
     final now = DateTime.now();
     for (final period in LeaderboardPeriod.values) {
@@ -5734,7 +5807,7 @@ class GameBackend {
       hostName: playerName,
       levelIndex: levelIndex,
     );
-    if (!_ready) return room;
+    if (!_canSync()) return room;
     await FirebaseFirestore.instance.collection('arenaRooms').doc(id).set({
       'hostUid': uid,
       'hostName': playerName,
@@ -5750,7 +5823,7 @@ class GameBackend {
   }
 
   Future<ArenaRoom> joinArenaRoom(String id, String playerName) async {
-    if (!_ready) {
+    if (!_canSync()) {
       return ArenaRoom(
         id: id,
         hostUid: 'host',
@@ -5775,7 +5848,7 @@ class GameBackend {
   }
 
   Stream<ArenaRoom?> watchArenaRoom(String id) {
-    if (!_ready) return Stream.value(null);
+    if (!_canSync()) return Stream.value(null);
     return FirebaseFirestore.instance
         .collection('arenaRooms')
         .doc(id)
@@ -5787,7 +5860,7 @@ class GameBackend {
   }
 
   Future<void> submitArenaScore(String roomId, int score) async {
-    if (!_ready) return;
+    if (!_canSync()) return;
     final ref = FirebaseFirestore.instance.collection('arenaRooms').doc(roomId);
     final snapshot = await ref.get();
     final room = ArenaRoom.fromMap(roomId, snapshot.data() ?? {});
