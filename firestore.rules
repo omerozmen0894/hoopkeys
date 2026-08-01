@@ -20,7 +20,8 @@ service cloud.firestore {
           'dailyClaimMask', 'bestStreak', 'currentStreak', 'activeSkin',
           'totalStars', 'totalWins', 'lastLoginRewardKey', 'lives',
           'lastLifeRefillIso', 'achievementMask', 'seasonRewardKey',
-          'ownedSkins', 'activeCourtTheme', 'ownedCourtThemes', 'updatedAt'
+          'chestClaimMask', 'skinShards', 'inviteCode', 'ownedSkins',
+          'activeCourtTheme', 'ownedCourtThemes', 'updatedAt'
         ]);
       allow delete: if owns(uid);
     }

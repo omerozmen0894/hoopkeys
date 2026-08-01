@@ -9,6 +9,9 @@ Hoop Keys, topu anahtarlar, engeller ve hareketli potalar arasindan gecirerek ba
 - Bolum sonu yildiz, coin ve XP odul animasyonu.
 - Basarim rozetleri, profil istatistikleri ve sezon XP sistemi.
 - Marketten 3'lu joker paketleri, top skinleri ve saha temalari alma.
+- 5 bolumde bir acilan sandiklar, skin parcasi toplama ve parcayla skin acma.
+- Haftalik turnuva banneri, arkadas davet kodu ve gunluk mini event paneli.
+- Offline-first ilerleme: oyun lokal kaydi korur, baglanti geldiginde Firebase alanlari guncellenir.
 - Her 10. bolumde daha belirgin final/ozel rota hissi.
 - Seviye zorlugu icin anonim olmayan, kullaniciya bagli dahili telemetry kaydi.
 

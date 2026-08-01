@@ -536,6 +536,9 @@ class _GameShellState extends State<GameShell> {
   String _lastLifeRefillIso = '';
   int _achievementMask = 0;
   String _seasonRewardKey = '';
+  int _chestClaimMask = 0;
+  int _skinShards = 0;
+  String _inviteCode = '';
   BallSkin _activeSkin = BallSkin.classic;
   Set<BallSkin> _ownedSkins = {BallSkin.classic};
   CourtTheme _activeCourtTheme = CourtTheme.classic;
@@ -584,6 +587,12 @@ class _GameShellState extends State<GameShell> {
       _lastLifeRefillIso = economy.lastLifeRefillIso;
       _achievementMask = economy.achievementMask;
       _seasonRewardKey = economy.seasonRewardKey;
+      _chestClaimMask = economy.chestClaimMask;
+      _skinShards = economy.skinShards;
+      _inviteCode =
+          economy.inviteCode.isEmpty
+              ? InviteReward.codeFor(widget.player.uid)
+              : economy.inviteCode;
       _activeSkin = economy.activeSkin;
       _ownedSkins = economy.ownedSkins;
       _activeCourtTheme = economy.activeCourtTheme;
@@ -625,6 +634,9 @@ class _GameShellState extends State<GameShell> {
       lastLifeRefillIso: _lastLifeRefillIso,
       achievementMask: _achievementMask,
       seasonRewardKey: _seasonRewardKey,
+      chestClaimMask: _chestClaimMask,
+      skinShards: _skinShards,
+      inviteCode: _inviteCode,
       activeSkin: _activeSkin,
       ownedSkins: _ownedSkins,
       activeCourtTheme: _activeCourtTheme,
@@ -655,6 +667,9 @@ class _GameShellState extends State<GameShell> {
       lastLifeRefillIso: _lastLifeRefillIso,
       achievementMask: _achievementMask,
       seasonRewardKey: _seasonRewardKey,
+      chestClaimMask: _chestClaimMask,
+      skinShards: _skinShards,
+      inviteCode: _inviteCode,
       activeSkin: _activeSkin,
       ownedSkins: _ownedSkins,
       activeCourtTheme: _activeCourtTheme,
@@ -740,6 +755,7 @@ class _GameShellState extends State<GameShell> {
         run: run,
       );
       if (reward > 0) _coins += reward;
+      if ((level.index + 1) % 5 == 0) _skinShards += 1;
     });
     unawaited(_backend.submitLevelTelemetry(level: level, run: run));
     await _saveEconomySnapshot(
@@ -782,6 +798,9 @@ class _GameShellState extends State<GameShell> {
       lastLifeRefillIso: _lastLifeRefillIso,
       achievementMask: _achievementMask,
       seasonRewardKey: _seasonRewardKey,
+      chestClaimMask: _chestClaimMask,
+      skinShards: _skinShards,
+      inviteCode: _inviteCode,
       activeSkin: _activeSkin,
       ownedSkins: _ownedSkins,
       activeCourtTheme: _activeCourtTheme,
@@ -845,6 +864,55 @@ class _GameShellState extends State<GameShell> {
     await _saveEconomySnapshot();
   }
 
+  Future<void> _claimChest(int chestIndex) async {
+    if (chestIndex < 0 || chestIndex >= ChestReward.maxChests) return;
+    final requiredLevel = (chestIndex + 1) * 5 - 1;
+    final bit = 1 << chestIndex;
+    if (_unlockedLevelIndex < requiredLevel || _chestClaimMask & bit != 0) {
+      return;
+    }
+    final reward = ChestReward.forIndex(chestIndex);
+    setState(() {
+      _chestClaimMask |= bit;
+      _coins += reward.coins;
+      _routeJokers += reward.routeJokers;
+      _breakerJokers += reward.breakerJokers;
+      _keyJokers += reward.keyJokers;
+      _skinShards += reward.skinShards;
+    });
+    await _saveEconomySnapshot();
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Sandik acildi: ${reward.summary}')));
+  }
+
+  Future<void> _claimInviteReward() async {
+    if (_achievementMask & InviteReward.claimBit != 0) return;
+    setState(() {
+      _achievementMask |= InviteReward.claimBit;
+      _coins += InviteReward.coins;
+      _routeJokers += 1;
+      _keyJokers += 1;
+    });
+    await _saveEconomySnapshot();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Davet odulu alindi: 150 coin + joker')),
+    );
+  }
+
+  Future<void> _craftSkin(BallSkin skin) async {
+    if (skin == BallSkin.classic || _ownedSkins.contains(skin)) return;
+    if (_skinShards < SkinCraft.requiredShards) return;
+    setState(() {
+      _skinShards -= SkinCraft.requiredShards;
+      _ownedSkins = {..._ownedSkins, skin};
+      _activeSkin = skin;
+    });
+    await _saveEconomySnapshot();
+  }
+
   Future<void> _loseLife(GameLevel level, GameRun run) async {
     if (_lives <= 0) return;
     setState(() => _lives -= 1);
@@ -886,6 +954,9 @@ class _GameShellState extends State<GameShell> {
             lastLifeRefillIso: _lastLifeRefillIso,
             achievementMask: _achievementMask,
             seasonRewardKey: _seasonRewardKey,
+            chestClaimMask: _chestClaimMask,
+            skinShards: _skinShards,
+            inviteCode: _inviteCode,
             activeSkin: _activeSkin,
             ownedSkins: _ownedSkins,
             activeCourtTheme: _activeCourtTheme,
@@ -943,8 +1014,13 @@ class _GameShellState extends State<GameShell> {
                 lives: _lives,
                 achievementMask: _achievementMask,
                 seasonRewardKey: _seasonRewardKey,
+                chestClaimMask: _chestClaimMask,
+                skinShards: _skinShards,
+                inviteCode: _inviteCode,
                 onOpen: (value) => setState(() => _tab = value),
                 onContinue: continueGame,
+                onClaimChest: _claimChest,
+                onClaimInviteReward: _claimInviteReward,
               ),
               PlayScreen(
                 backend: _backend,
@@ -981,10 +1057,12 @@ class _GameShellState extends State<GameShell> {
                 premium: _premium,
                 activeSkin: _activeSkin,
                 ownedSkins: _ownedSkins,
+                skinShards: _skinShards,
                 activeCourtTheme: _activeCourtTheme,
                 ownedCourtThemes: _ownedCourtThemes,
                 onEquipSkin: _equipSkin,
                 onBuySkin: _buySkin,
+                onCraftSkin: _craftSkin,
                 onEquipCourtTheme: _equipCourtTheme,
                 onBuyCourtTheme: _buyCourtTheme,
                 onBuyJokerPack: _buyJokerPack,
@@ -1052,8 +1130,13 @@ class MainMenuScreen extends StatelessWidget {
     required this.lives,
     required this.achievementMask,
     required this.seasonRewardKey,
+    required this.chestClaimMask,
+    required this.skinShards,
+    required this.inviteCode,
     required this.onOpen,
     required this.onContinue,
+    required this.onClaimChest,
+    required this.onClaimInviteReward,
   });
 
   final String playerName;
@@ -1073,8 +1156,13 @@ class MainMenuScreen extends StatelessWidget {
   final int lives;
   final int achievementMask;
   final String seasonRewardKey;
+  final int chestClaimMask;
+  final int skinShards;
+  final String inviteCode;
   final ValueChanged<int> onOpen;
   final VoidCallback onContinue;
+  final ValueChanged<int> onClaimChest;
+  final VoidCallback onClaimInviteReward;
 
   @override
   Widget build(BuildContext context) {
@@ -1096,8 +1184,13 @@ class MainMenuScreen extends StatelessWidget {
       lives: lives,
       achievementMask: achievementMask,
       seasonRewardKey: seasonRewardKey,
+      chestClaimMask: chestClaimMask,
+      skinShards: skinShards,
+      inviteCode: inviteCode,
       onOpen: onOpen,
       onContinue: onContinue,
+      onClaimChest: onClaimChest,
+      onClaimInviteReward: onClaimInviteReward,
     );
   }
 
@@ -1189,8 +1282,13 @@ class GameLobbyMenu extends StatelessWidget {
     required this.lives,
     required this.achievementMask,
     required this.seasonRewardKey,
+    required this.chestClaimMask,
+    required this.skinShards,
+    required this.inviteCode,
     required this.onOpen,
     required this.onContinue,
+    required this.onClaimChest,
+    required this.onClaimInviteReward,
   });
 
   final String playerName;
@@ -1210,8 +1308,13 @@ class GameLobbyMenu extends StatelessWidget {
   final int lives;
   final int achievementMask;
   final String seasonRewardKey;
+  final int chestClaimMask;
+  final int skinShards;
+  final String inviteCode;
   final ValueChanged<int> onOpen;
   final VoidCallback onContinue;
+  final ValueChanged<int> onClaimChest;
+  final VoidCallback onClaimInviteReward;
 
   @override
   Widget build(BuildContext context) {
@@ -1275,6 +1378,23 @@ class GameLobbyMenu extends StatelessWidget {
                         unlockedLevelIndex: unlockedLevelIndex,
                         lives: lives,
                         achievementMask: achievementMask,
+                      ),
+                      const SizedBox(height: 12),
+                      LiveEventPanel(
+                        unlockedLevelIndex: unlockedLevelIndex,
+                        skinShards: skinShards,
+                      ),
+                      const SizedBox(height: 12),
+                      ChestRoadPanel(
+                        unlockedLevelIndex: unlockedLevelIndex,
+                        claimMask: chestClaimMask,
+                        onClaim: onClaimChest,
+                      ),
+                      const SizedBox(height: 12),
+                      InvitePanel(
+                        code: inviteCode,
+                        claimed: achievementMask & InviteReward.claimBit != 0,
+                        onClaim: onClaimInviteReward,
                       ),
                       const SizedBox(height: 12),
                       Container(
@@ -2325,6 +2445,244 @@ class DailyRewardCalendar extends StatelessWidget {
                 );
               },
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class LiveEventPanel extends StatelessWidget {
+  const LiveEventPanel({
+    super.key,
+    required this.unlockedLevelIndex,
+    required this.skinShards,
+  });
+
+  final int unlockedLevelIndex;
+  final int skinShards;
+
+  @override
+  Widget build(BuildContext context) {
+    final event = LiveEvent.today();
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xff101827).withValues(alpha: 0.88),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0x557dd3fc)),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: const Color(0xff7dd3fc),
+            foregroundColor: Colors.black,
+            child: Icon(event.icon),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  event.title,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                Text(
+                  event.body,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Chip(label: Text('${unlockedLevelIndex + 1}.B | $skinShards parca')),
+        ],
+      ),
+    );
+  }
+}
+
+class ChestRoadPanel extends StatelessWidget {
+  const ChestRoadPanel({
+    super.key,
+    required this.unlockedLevelIndex,
+    required this.claimMask,
+    required this.onClaim,
+  });
+
+  final int unlockedLevelIndex;
+  final int claimMask;
+  final ValueChanged<int> onClaim;
+
+  @override
+  Widget build(BuildContext context) {
+    final start = (unlockedLevelIndex ~/ 5 - 1).clamp(
+      0,
+      ChestReward.maxChests - 4,
+    );
+    final visible = [
+      for (var i = start; i < math.min(ChestReward.maxChests, start + 4); i++)
+        i,
+    ];
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xff1d1508).withValues(alpha: 0.88),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0x55ffd166)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.inventory_2, color: Color(0xffffd166)),
+              SizedBox(width: 8),
+              Text(
+                'Bolum Sandiklari',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              for (final index in visible)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                    child: _ChestNode(
+                      index: index,
+                      unlockedLevelIndex: unlockedLevelIndex,
+                      claimed: claimMask & (1 << index) != 0,
+                      onClaim: () => onClaim(index),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChestNode extends StatelessWidget {
+  const _ChestNode({
+    required this.index,
+    required this.unlockedLevelIndex,
+    required this.claimed,
+    required this.onClaim,
+  });
+
+  final int index;
+  final int unlockedLevelIndex;
+  final bool claimed;
+  final VoidCallback onClaim;
+
+  @override
+  Widget build(BuildContext context) {
+    final requiredLevel = (index + 1) * 5;
+    final ready = unlockedLevelIndex + 1 >= requiredLevel && !claimed;
+    final locked = unlockedLevelIndex + 1 < requiredLevel;
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: ready ? onClaim : null,
+      child: Ink(
+        height: 82,
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color:
+              ready
+                  ? const Color(0xffffd166).withValues(alpha: 0.20)
+                  : Colors.black.withValues(alpha: 0.22),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: ready ? const Color(0xffffd166) : Colors.white12,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              claimed
+                  ? Icons.verified
+                  : locked
+                  ? Icons.lock
+                  : Icons.inventory_2,
+              color:
+                  ready || claimed ? const Color(0xffffd166) : Colors.white54,
+            ),
+            const SizedBox(height: 5),
+            Text(
+              'B$requiredLevel',
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+            Text(
+              claimed
+                  ? 'Alindi'
+                  : ready
+                  ? 'Ac'
+                  : 'Kilitli',
+              style: const TextStyle(color: Colors.white60, fontSize: 11),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class InvitePanel extends StatelessWidget {
+  const InvitePanel({
+    super.key,
+    required this.code,
+    required this.claimed,
+    required this.onClaim,
+  });
+
+  final String code;
+  final bool claimed;
+  final VoidCallback onClaim;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xff071f1c).withValues(alpha: 0.86),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0x5519f5a8)),
+      ),
+      child: Row(
+        children: [
+          const CircleAvatar(
+            backgroundColor: Color(0xff19f5a8),
+            foregroundColor: Colors.black,
+            child: Icon(Icons.group_add),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Arkadas Daveti',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+                Text(
+                  'Kodun: $code | Arkadasina gonder, odulunu al.',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          FilledButton.tonal(
+            onPressed: claimed ? null : onClaim,
+            child: Text(claimed ? 'Alindi' : 'Odul'),
           ),
         ],
       ),
@@ -3498,6 +3856,91 @@ class AchievementRule {
   }
 }
 
+class ChestReward {
+  const ChestReward({
+    required this.coins,
+    required this.routeJokers,
+    required this.breakerJokers,
+    required this.keyJokers,
+    required this.skinShards,
+  });
+
+  final int coins;
+  final int routeJokers;
+  final int breakerJokers;
+  final int keyJokers;
+  final int skinShards;
+
+  static const maxChests = 20;
+
+  String get summary =>
+      '$coins coin + $skinShards parca + $routeJokers/$breakerJokers/$keyJokers joker';
+
+  static ChestReward forIndex(int index) {
+    final tier = index ~/ 4;
+    return ChestReward(
+      coins: 90 + tier * 45,
+      routeJokers: index.isEven ? 1 : 0,
+      breakerJokers: index % 3 == 0 ? 1 : 0,
+      keyJokers: index % 2 == 1 ? 1 : 0,
+      skinShards: 1 + (index % 5 == 4 ? 1 : 0),
+    );
+  }
+}
+
+class SkinCraft {
+  static const requiredShards = 10;
+}
+
+class InviteReward {
+  static const coins = 150;
+  static const claimBit = 1 << 12;
+
+  static String codeFor(String uid) {
+    final clean = uid.replaceAll(RegExp('[^A-Za-z0-9]'), '').toUpperCase();
+    if (clean.length >= 6) return 'HK-${clean.substring(0, 6)}';
+    return 'HK-${clean.padRight(6, '7')}';
+  }
+}
+
+class LiveEvent {
+  const LiveEvent({
+    required this.title,
+    required this.body,
+    required this.multiplierLabel,
+    required this.icon,
+  });
+
+  final String title;
+  final String body;
+  final String multiplierLabel;
+  final IconData icon;
+
+  static LiveEvent today([DateTime? date]) {
+    final day = (date ?? DateTime.now()).weekday;
+    return switch (day) {
+      DateTime.saturday || DateTime.sunday => const LiveEvent(
+        title: 'Hafta Sonu Turnuvasi',
+        body: 'Haftalik siralamada skor kas, final sandiklari daha degerli.',
+        multiplierLabel: 'Turnuva',
+        icon: Icons.emoji_events,
+      ),
+      DateTime.wednesday => const LiveEvent(
+        title: 'Cift Parca Gunu',
+        body: '5 bolumluk sandiklardan skin parcasi toplamaya odaklan.',
+        multiplierLabel: 'Parca',
+        icon: Icons.auto_awesome,
+      ),
+      _ => const LiveEvent(
+        title: 'Gunluk Seri',
+        body: 'Canini koru, 3 yildizli bolumlerde ekstra tempo yakala.',
+        multiplierLabel: 'Seri',
+        icon: Icons.local_fire_department,
+      ),
+    };
+  }
+}
+
 class PlayerLeague {
   const PlayerLeague({
     required this.name,
@@ -3811,7 +4254,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 separatorBuilder: (_, __) => const SizedBox(height: 8),
                 itemBuilder: (context, index) {
                   if (index == 0) {
-                    return TopThreePodium(entries: topEntries);
+                    return Column(
+                      children: [
+                        TournamentBanner(period: _period),
+                        const SizedBox(height: 10),
+                        TopThreePodium(entries: topEntries),
+                      ],
+                    );
                   }
                   return LeaderboardTile(
                     entry: restEntries[index - 1],
@@ -3823,6 +4272,58 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class TournamentBanner extends StatelessWidget {
+  const TournamentBanner({super.key, required this.period});
+
+  final LeaderboardPeriod period;
+
+  @override
+  Widget build(BuildContext context) {
+    final weekly = period == LeaderboardPeriod.weekly;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xffffd166).withValues(alpha: weekly ? 0.22 : 0.12),
+            const Color(0xff111827),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0x55ffd166)),
+      ),
+      child: Row(
+        children: [
+          const CircleAvatar(
+            backgroundColor: Color(0xffffd166),
+            foregroundColor: Colors.black,
+            child: Icon(Icons.emoji_events),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  weekly ? 'Haftalik Turnuva Aktif' : 'Turnuva modu hazir',
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                Text(
+                  weekly
+                      ? 'Ayni hafta icindeki toplam skorunla podyuma cik.'
+                      : 'Haftalik sekmeye gec, turnuva skorunu takip et.',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          Chip(label: Text(period.label)),
+        ],
+      ),
     );
   }
 }
@@ -4094,10 +4595,12 @@ class StoreScreen extends StatelessWidget {
     required this.premium,
     required this.activeSkin,
     required this.ownedSkins,
+    required this.skinShards,
     required this.activeCourtTheme,
     required this.ownedCourtThemes,
     required this.onEquipSkin,
     required this.onBuySkin,
+    required this.onCraftSkin,
     required this.onEquipCourtTheme,
     required this.onBuyCourtTheme,
     required this.onBuyJokerPack,
@@ -4109,10 +4612,12 @@ class StoreScreen extends StatelessWidget {
   final bool premium;
   final BallSkin activeSkin;
   final Set<BallSkin> ownedSkins;
+  final int skinShards;
   final CourtTheme activeCourtTheme;
   final Set<CourtTheme> ownedCourtThemes;
   final ValueChanged<BallSkin> onEquipSkin;
   final ValueChanged<BallSkin> onBuySkin;
+  final ValueChanged<BallSkin> onCraftSkin;
   final ValueChanged<CourtTheme> onEquipCourtTheme;
   final ValueChanged<CourtTheme> onBuyCourtTheme;
   final ValueChanged<PowerUpKind> onBuyJokerPack;
@@ -4180,7 +4685,7 @@ class StoreScreen extends StatelessWidget {
         ),
         const SizedBox(height: 18),
         Text(
-          'Top Skinleri',
+          'Top Skinleri | $skinShards/${SkinCraft.requiredShards} parca',
           style: Theme.of(
             context,
           ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
@@ -4194,8 +4699,10 @@ class StoreScreen extends StatelessWidget {
               owned: ownedSkins.contains(skin),
               active: activeSkin == skin,
               coins: coins,
+              shards: skinShards,
               onEquip: () => onEquipSkin(skin),
               onBuy: () => onBuySkin(skin),
+              onCraft: () => onCraftSkin(skin),
             ),
           ),
         ),
@@ -4317,16 +4824,20 @@ class SkinOffer extends StatelessWidget {
     required this.owned,
     required this.active,
     required this.coins,
+    required this.shards,
     required this.onEquip,
     required this.onBuy,
+    required this.onCraft,
   });
 
   final BallSkin skin;
   final bool owned;
   final bool active;
   final int coins;
+  final int shards;
   final VoidCallback onEquip;
   final VoidCallback onBuy;
+  final VoidCallback onCraft;
 
   @override
   Widget build(BuildContext context) {
@@ -4380,22 +4891,33 @@ class SkinOffer extends StatelessWidget {
               ],
             ),
           ),
-          FilledButton.tonal(
-            onPressed:
-                active
-                    ? null
-                    : owned
-                    ? onEquip
-                    : coins >= skin.price
-                    ? onBuy
-                    : null,
-            child: Text(
-              active
-                  ? 'Aktif'
-                  : owned
-                  ? 'Sec'
-                  : '${skin.price}c',
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              FilledButton.tonal(
+                onPressed:
+                    active
+                        ? null
+                        : owned
+                        ? onEquip
+                        : coins >= skin.price
+                        ? onBuy
+                        : null,
+                child: Text(
+                  active
+                      ? 'Aktif'
+                      : owned
+                      ? 'Sec'
+                      : '${skin.price}c',
+                ),
+              ),
+              if (!owned && skin != BallSkin.classic)
+                TextButton(
+                  onPressed:
+                      shards >= SkinCraft.requiredShards ? onCraft : null,
+                  child: const Text('Parcayla ac'),
+                ),
+            ],
           ),
         ],
       ),
@@ -7365,6 +7887,10 @@ class GameBackend {
     final localLives = _refilledLives(localLivesRaw, localLastLifeRefill);
     final localAchievementMask = prefs.getInt('achievement_mask_$uid') ?? 0;
     final localSeasonRewardKey = prefs.getString('season_reward_$uid') ?? '';
+    final localChestClaimMask = prefs.getInt('chest_claims_$uid') ?? 0;
+    final localSkinShards = prefs.getInt('skin_shards_$uid') ?? 0;
+    final localInviteCode =
+        prefs.getString('invite_code_$uid') ?? InviteReward.codeFor(uid);
     final localActiveSkin = BallSkin.fromId(
       prefs.getString('active_skin_$uid'),
     );
@@ -7403,6 +7929,9 @@ class GameBackend {
         lastLifeRefillIso: localLastLifeRefill,
         achievementMask: localAchievementMask,
         seasonRewardKey: localSeasonRewardKey,
+        chestClaimMask: localChestClaimMask,
+        skinShards: localSkinShards,
+        inviteCode: localInviteCode,
         activeSkin:
             localOwnedSkins.contains(localActiveSkin)
                 ? localActiveSkin
@@ -7457,6 +7986,10 @@ class GameBackend {
           data['achievementMask'] as int? ?? localAchievementMask;
       final seasonRewardKey =
           data['seasonRewardKey'] as String? ?? localSeasonRewardKey;
+      final chestClaimMask =
+          data['chestClaimMask'] as int? ?? localChestClaimMask;
+      final skinShards = data['skinShards'] as int? ?? localSkinShards;
+      final inviteCode = data['inviteCode'] as String? ?? localInviteCode;
       final ownedSkins =
           ((data['ownedSkins'] as List?)?.whereType<String>().toList() ??
                   localOwnedSkins.map((item) => item.id).toList())
@@ -7493,6 +8026,9 @@ class GameBackend {
       await prefs.setString('life_refill_$uid', lastLifeRefillIso);
       await prefs.setInt('achievement_mask_$uid', achievementMask);
       await prefs.setString('season_reward_$uid', seasonRewardKey);
+      await prefs.setInt('chest_claims_$uid', chestClaimMask);
+      await prefs.setInt('skin_shards_$uid', skinShards);
+      await prefs.setString('invite_code_$uid', inviteCode);
       await prefs.setString(
         'active_skin_$uid',
         ownedSkins.contains(activeSkin) ? activeSkin.id : BallSkin.classic.id,
@@ -7532,6 +8068,9 @@ class GameBackend {
         lastLifeRefillIso: lastLifeRefillIso,
         achievementMask: achievementMask,
         seasonRewardKey: seasonRewardKey,
+        chestClaimMask: chestClaimMask,
+        skinShards: skinShards,
+        inviteCode: inviteCode,
         activeSkin:
             ownedSkins.contains(activeSkin) ? activeSkin : BallSkin.classic,
         ownedSkins: ownedSkins,
@@ -7563,6 +8102,9 @@ class GameBackend {
         lastLifeRefillIso: localLastLifeRefill,
         achievementMask: localAchievementMask,
         seasonRewardKey: localSeasonRewardKey,
+        chestClaimMask: localChestClaimMask,
+        skinShards: localSkinShards,
+        inviteCode: localInviteCode,
         activeSkin:
             localOwnedSkins.contains(localActiveSkin)
                 ? localActiveSkin
@@ -7608,6 +8150,9 @@ class GameBackend {
     required String lastLifeRefillIso,
     required int achievementMask,
     required String seasonRewardKey,
+    required int chestClaimMask,
+    required int skinShards,
+    required String inviteCode,
     required BallSkin activeSkin,
     required Set<BallSkin> ownedSkins,
     required CourtTheme activeCourtTheme,
@@ -7647,6 +8192,12 @@ class GameBackend {
     await prefs.setString('life_refill_$uid', lifeRefill);
     await prefs.setInt('achievement_mask_$uid', achievementMask);
     await prefs.setString('season_reward_$uid', seasonRewardKey);
+    await prefs.setInt('chest_claims_$uid', chestClaimMask);
+    await prefs.setInt('skin_shards_$uid', skinShards);
+    await prefs.setString(
+      'invite_code_$uid',
+      inviteCode.isEmpty ? InviteReward.codeFor(uid) : inviteCode,
+    );
     await prefs.setString('active_skin_$uid', safeActive.id);
     await prefs.setStringList(
       'owned_skins_$uid',
@@ -7679,6 +8230,9 @@ class GameBackend {
       'lastLifeRefillIso': lifeRefill,
       'achievementMask': achievementMask,
       'seasonRewardKey': seasonRewardKey,
+      'chestClaimMask': chestClaimMask,
+      'skinShards': skinShards,
+      'inviteCode': inviteCode.isEmpty ? InviteReward.codeFor(uid) : inviteCode,
       'activeSkin': safeActive.id,
       'ownedSkins': safeOwned.map((item) => item.id).toList(),
       'activeCourtTheme': safeActiveCourt.id,
@@ -7716,8 +8270,17 @@ class GameBackend {
       prefs.remove('total_stars_$uid'),
       prefs.remove('total_wins_$uid'),
       prefs.remove('login_reward_$uid'),
+      prefs.remove('lives_$uid'),
+      prefs.remove('life_refill_$uid'),
+      prefs.remove('achievement_mask_$uid'),
+      prefs.remove('season_reward_$uid'),
+      prefs.remove('chest_claims_$uid'),
+      prefs.remove('skin_shards_$uid'),
+      prefs.remove('invite_code_$uid'),
       prefs.remove('active_skin_$uid'),
       prefs.remove('owned_skins_$uid'),
+      prefs.remove('active_court_$uid'),
+      prefs.remove('owned_courts_$uid'),
     ]);
     if (!_canSync(uid)) return;
     final firestore = FirebaseFirestore.instance;
@@ -7953,6 +8516,9 @@ class GameEconomy {
     required this.lastLifeRefillIso,
     required this.achievementMask,
     required this.seasonRewardKey,
+    required this.chestClaimMask,
+    required this.skinShards,
+    required this.inviteCode,
     required this.activeSkin,
     required this.ownedSkins,
     required this.activeCourtTheme,
@@ -7982,6 +8548,9 @@ class GameEconomy {
   final String lastLifeRefillIso;
   final int achievementMask;
   final String seasonRewardKey;
+  final int chestClaimMask;
+  final int skinShards;
+  final String inviteCode;
   final BallSkin activeSkin;
   final Set<BallSkin> ownedSkins;
   final CourtTheme activeCourtTheme;
