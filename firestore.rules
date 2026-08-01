@@ -15,7 +15,10 @@ service cloud.firestore {
       allow create, update: if owns(uid)
         && request.resource.data.keys().hasOnly([
           'name', 'email', 'unlockedLevelIndex', 'coins', 'premium',
-          'routeJokers', 'breakerJokers', 'keyJokers', 'updatedAt'
+          'routeJokers', 'breakerJokers', 'keyJokers', 'seasonXp',
+          'dailyKey', 'dailyWins', 'dailyBonusCoins', 'dailyStars',
+          'dailyClaimMask', 'bestStreak', 'currentStreak', 'activeSkin',
+          'ownedSkins', 'updatedAt'
         ]);
       allow delete: if owns(uid);
     }
