@@ -1007,107 +1007,124 @@ class GameLobbyMenu extends StatelessWidget {
       children: [
         const GameLobbyBackdrop(),
         SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: _PlayerBadge(
-                        playerName: playerName,
-                        premium: premium,
-                        onAccount: () => onOpen(6),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    _CoinBadge(coins: coins),
-                  ],
-                ),
-                const Spacer(),
-                _ArenaHeroPanel(nextLevel: nextLevel),
-                const SizedBox(height: 16),
-                _SeasonLeagueStrip(
-                  seasonXp: seasonXp,
-                  bestStreak: bestStreak,
-                  activeSkin: activeSkin,
-                ),
-                const SizedBox(height: 12),
-                _DailyQuestPanel(
-                  wins: dailyWins,
-                  bonusCoins: dailyBonusCoins,
-                  stars: dailyStars,
-                  claimMask: dailyClaimMask,
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(22),
-                    color: Colors.black.withValues(alpha: 0.26),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.12),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.28),
-                        blurRadius: 24,
-                        offset: const Offset(0, 14),
-                      ),
-                    ],
-                  ),
-                  child: _ProgressRunway(progress: progress, level: nextLevel),
-                ),
-                const SizedBox(height: 18),
-                _PlayButton(onPressed: onContinue),
-                const SizedBox(height: 18),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(28),
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        const Color(0xff081411).withValues(alpha: 0.92),
-                        const Color(0xff0d2923).withValues(alpha: 0.92),
-                      ],
-                    ),
-                    border: Border.all(
-                      color: const Color(0xff19f5a8).withValues(alpha: 0.20),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final heroGap = math.max(
+                14.0,
+                math.min(34.0, constraints.maxHeight * 0.04),
+              );
+              return SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Column(
                     children: [
-                      _DockAction(
-                        icon: Icons.leaderboard,
-                        label: 'Siralama',
-                        onTap: () => onOpen(2),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _PlayerBadge(
+                              playerName: playerName,
+                              premium: premium,
+                              onAccount: () => onOpen(6),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          _CoinBadge(coins: coins),
+                        ],
                       ),
-                      _DockAction(
-                        icon: Icons.storefront,
-                        label: 'Market',
-                        onTap: () => onOpen(4),
+                      SizedBox(height: heroGap),
+                      _ArenaHeroPanel(nextLevel: nextLevel),
+                      const SizedBox(height: 16),
+                      _SeasonLeagueStrip(
+                        seasonXp: seasonXp,
+                        bestStreak: bestStreak,
+                        activeSkin: activeSkin,
                       ),
-                      _DockAction(
-                        icon: Icons.school,
-                        label: 'Rehber',
-                        onTap: () => onOpen(5),
+                      const SizedBox(height: 12),
+                      _DailyQuestPanel(
+                        wins: dailyWins,
+                        bonusCoins: dailyBonusCoins,
+                        stars: dailyStars,
+                        claimMask: dailyClaimMask,
                       ),
-                      _DockAction(
-                        icon: Icons.groups_rounded,
-                        label: 'Arena',
-                        onTap: () => onOpen(3),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(22),
+                          color: Colors.black.withValues(alpha: 0.26),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.12),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.28),
+                              blurRadius: 24,
+                              offset: const Offset(0, 14),
+                            ),
+                          ],
+                        ),
+                        child: _ProgressRunway(
+                          progress: progress,
+                          level: nextLevel,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      _PlayButton(onPressed: onContinue),
+                      const SizedBox(height: 18),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(28),
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              const Color(0xff081411).withValues(alpha: 0.92),
+                              const Color(0xff0d2923).withValues(alpha: 0.92),
+                            ],
+                          ),
+                          border: Border.all(
+                            color: const Color(
+                              0xff19f5a8,
+                            ).withValues(alpha: 0.20),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _DockAction(
+                              icon: Icons.leaderboard,
+                              label: 'Siralama',
+                              onTap: () => onOpen(2),
+                            ),
+                            _DockAction(
+                              icon: Icons.storefront,
+                              label: 'Market',
+                              onTap: () => onOpen(4),
+                            ),
+                            _DockAction(
+                              icon: Icons.school,
+                              label: 'Rehber',
+                              onTap: () => onOpen(5),
+                            ),
+                            _DockAction(
+                              icon: Icons.groups_rounded,
+                              label: 'Arena',
+                              onTap: () => onOpen(3),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ],
-            ),
+              );
+            },
           ),
         ),
       ],
