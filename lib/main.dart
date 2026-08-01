@@ -528,6 +528,9 @@ class _GameShellState extends State<GameShell> {
   int _dailyClaimMask = 0;
   int _bestStreak = 0;
   int _currentStreak = 0;
+  int _totalStars = 0;
+  int _totalWins = 0;
+  String _lastLoginRewardKey = '';
   BallSkin _activeSkin = BallSkin.classic;
   Set<BallSkin> _ownedSkins = {BallSkin.classic};
   bool _premium = false;
@@ -567,10 +570,14 @@ class _GameShellState extends State<GameShell> {
       _dailyClaimMask = economy.dailyClaimMask;
       _bestStreak = economy.bestStreak;
       _currentStreak = economy.currentStreak;
+      _totalStars = economy.totalStars;
+      _totalWins = economy.totalWins;
+      _lastLoginRewardKey = economy.lastLoginRewardKey;
       _activeSkin = economy.activeSkin;
       _ownedSkins = economy.ownedSkins;
       _premium = economy.premium;
     });
+    unawaited(_claimLoginRewardIfNeeded());
   }
 
   Future<void> _unlockNext(int finishedLevel) async {
@@ -597,6 +604,9 @@ class _GameShellState extends State<GameShell> {
       dailyClaimMask: _dailyClaimMask,
       bestStreak: _bestStreak,
       currentStreak: _currentStreak,
+      totalStars: _totalStars,
+      totalWins: _totalWins,
+      lastLoginRewardKey: _lastLoginRewardKey,
       activeSkin: _activeSkin,
       ownedSkins: _ownedSkins,
     );
@@ -618,6 +628,9 @@ class _GameShellState extends State<GameShell> {
       dailyClaimMask: _dailyClaimMask,
       bestStreak: _bestStreak,
       currentStreak: _currentStreak,
+      totalStars: _totalStars,
+      totalWins: _totalWins,
+      lastLoginRewardKey: _lastLoginRewardKey,
       activeSkin: _activeSkin,
       ownedSkins: _ownedSkins,
     );
@@ -670,6 +683,8 @@ class _GameShellState extends State<GameShell> {
       _seasonXp += seasonGain;
       _currentStreak = streak;
       _bestStreak = math.max(_bestStreak, streak);
+      _totalWins += 1;
+      _totalStars += run.starRating;
       if (reward > 0) _coins += reward;
     });
     await _saveEconomySnapshot(
@@ -705,9 +720,48 @@ class _GameShellState extends State<GameShell> {
       dailyClaimMask: dailyClaimMask ?? _dailyClaimMask,
       bestStreak: _bestStreak,
       currentStreak: _currentStreak,
+      totalStars: _totalStars,
+      totalWins: _totalWins,
+      lastLoginRewardKey: _lastLoginRewardKey,
       activeSkin: _activeSkin,
       ownedSkins: _ownedSkins,
     );
+  }
+
+  Future<void> _claimLoginRewardIfNeeded() async {
+    final today = DailyQuest.todayKey();
+    if (_lastLoginRewardKey == today) return;
+    final reward = DailyReward.rewardFor(DateTime.now());
+    if (!mounted) return;
+    setState(() {
+      _lastLoginRewardKey = today;
+      _coins += reward.coins;
+      _routeJokers += reward.routeJokers;
+      _breakerJokers += reward.breakerJokers;
+      _keyJokers += reward.keyJokers;
+    });
+    await _saveEconomySnapshot();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Gunluk odul alindi: ${reward.summary}')),
+    );
+  }
+
+  Future<void> _buyJokerPack(PowerUpKind kind) async {
+    const price = 180;
+    if (_coins < price) return;
+    setState(() {
+      _coins -= price;
+      switch (kind) {
+        case PowerUpKind.route:
+          _routeJokers += 3;
+        case PowerUpKind.breaker:
+          _breakerJokers += 3;
+        case PowerUpKind.key:
+          _keyJokers += 3;
+      }
+    });
+    await _saveEconomySnapshot();
   }
 
   Future<bool> _spendJoker(PowerUpKind kind) async {
@@ -736,6 +790,9 @@ class _GameShellState extends State<GameShell> {
             dailyClaimMask: _dailyClaimMask,
             bestStreak: _bestStreak,
             currentStreak: _currentStreak,
+            totalStars: _totalStars,
+            totalWins: _totalWins,
+            lastLoginRewardKey: _lastLoginRewardKey,
             activeSkin: _activeSkin,
             ownedSkins: _ownedSkins,
           )
@@ -776,6 +833,9 @@ class _GameShellState extends State<GameShell> {
                 dailyStars: _dailyStars,
                 dailyClaimMask: _dailyClaimMask,
                 unlockedLevelIndex: _unlockedLevelIndex,
+                totalStars: _totalStars,
+                totalWins: _totalWins,
+                lastLoginRewardKey: _lastLoginRewardKey,
                 onOpen: (value) => setState(() => _tab = value),
                 onContinue: continueGame,
               ),
@@ -814,6 +874,7 @@ class _GameShellState extends State<GameShell> {
                 ownedSkins: _ownedSkins,
                 onEquipSkin: _equipSkin,
                 onBuySkin: _buySkin,
+                onBuyJokerPack: _buyJokerPack,
                 onActivatePremium: _activatePremium,
                 onBack: goMenu,
               ),
@@ -823,6 +884,14 @@ class _GameShellState extends State<GameShell> {
                 playerName: _playerName,
                 email: widget.player.emailLabel,
                 canDeleteAccount: widget.player.isFirebaseBacked,
+                coins: _coins,
+                premium: _premium,
+                seasonXp: _seasonXp,
+                bestStreak: _bestStreak,
+                currentStreak: _currentStreak,
+                totalStars: _totalStars,
+                totalWins: _totalWins,
+                activeSkin: _activeSkin,
                 onSignOut: () => _signOut(context),
                 onChanged: (value) => setState(() => _playerName = value),
                 onBack: goMenu,
@@ -862,6 +931,9 @@ class MainMenuScreen extends StatelessWidget {
     required this.dailyStars,
     required this.dailyClaimMask,
     required this.unlockedLevelIndex,
+    required this.totalStars,
+    required this.totalWins,
+    required this.lastLoginRewardKey,
     required this.onOpen,
     required this.onContinue,
   });
@@ -877,6 +949,9 @@ class MainMenuScreen extends StatelessWidget {
   final int dailyStars;
   final int dailyClaimMask;
   final int unlockedLevelIndex;
+  final int totalStars;
+  final int totalWins;
+  final String lastLoginRewardKey;
   final ValueChanged<int> onOpen;
   final VoidCallback onContinue;
 
@@ -894,6 +969,9 @@ class MainMenuScreen extends StatelessWidget {
       dailyStars: dailyStars,
       dailyClaimMask: dailyClaimMask,
       unlockedLevelIndex: unlockedLevelIndex,
+      totalStars: totalStars,
+      totalWins: totalWins,
+      lastLoginRewardKey: lastLoginRewardKey,
       onOpen: onOpen,
       onContinue: onContinue,
     );
@@ -981,6 +1059,9 @@ class GameLobbyMenu extends StatelessWidget {
     required this.dailyStars,
     required this.dailyClaimMask,
     required this.unlockedLevelIndex,
+    required this.totalStars,
+    required this.totalWins,
+    required this.lastLoginRewardKey,
     required this.onOpen,
     required this.onContinue,
   });
@@ -996,6 +1077,9 @@ class GameLobbyMenu extends StatelessWidget {
   final int dailyStars;
   final int dailyClaimMask;
   final int unlockedLevelIndex;
+  final int totalStars;
+  final int totalWins;
+  final String lastLoginRewardKey;
   final ValueChanged<int> onOpen;
   final VoidCallback onContinue;
 
@@ -1047,6 +1131,17 @@ class GameLobbyMenu extends StatelessWidget {
                         bonusCoins: dailyBonusCoins,
                         stars: dailyStars,
                         claimMask: dailyClaimMask,
+                      ),
+                      const SizedBox(height: 12),
+                      DailyRewardCalendar(
+                        claimedToday:
+                            lastLoginRewardKey == DailyQuest.todayKey(),
+                      ),
+                      const SizedBox(height: 12),
+                      _PlayerProfileStrip(
+                        totalStars: totalStars,
+                        totalWins: totalWins,
+                        unlockedLevelIndex: unlockedLevelIndex,
                       ),
                       const SizedBox(height: 12),
                       Container(
@@ -1905,6 +2000,190 @@ class _DailyQuestPanel extends StatelessWidget {
   }
 }
 
+class _PlayerProfileStrip extends StatelessWidget {
+  const _PlayerProfileStrip({
+    required this.totalStars,
+    required this.totalWins,
+    required this.unlockedLevelIndex,
+  });
+
+  final int totalStars;
+  final int totalWins;
+  final int unlockedLevelIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [
+      (Icons.star, '$totalStars', 'Yildiz'),
+      (Icons.sports_score, '$totalWins', 'Bitis'),
+      (Icons.route, '${unlockedLevelIndex + 1}', 'Bolum'),
+    ];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.24),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < items.length; i++) ...[
+            Expanded(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(items[i].$1, color: const Color(0xffffd166), size: 18),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          items[i].$2,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                        Text(
+                          items[i].$3,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (i != items.length - 1)
+              Container(
+                width: 1,
+                height: 30,
+                color: Colors.white.withValues(alpha: 0.10),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class DailyRewardCalendar extends StatelessWidget {
+  const DailyRewardCalendar({super.key, required this.claimedToday});
+
+  final bool claimedToday;
+
+  @override
+  Widget build(BuildContext context) {
+    final today = DateTime.now();
+    final todayIndex =
+        today.difference(DateTime(2026)).inDays.abs() %
+        DailyReward.rewards.length;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xff1d1508).withValues(alpha: 0.88),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0x55ffd166)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.card_giftcard, color: Color(0xffffd166)),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Gunluk Odul Takvimi',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+              Text(
+                claimedToday ? 'Alindi' : 'Hazir',
+                style: TextStyle(
+                  color:
+                      claimedToday
+                          ? const Color(0xff19f5a8)
+                          : const Color(0xffffd166),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 82,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: DailyReward.rewards.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final reward = DailyReward.rewards[index];
+                final active = index == todayIndex;
+                return Container(
+                  width: 82,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color:
+                        active
+                            ? const Color(0xffffd166).withValues(alpha: 0.20)
+                            : Colors.black.withValues(alpha: 0.22),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color:
+                          active
+                              ? const Color(0xffffd166)
+                              : Colors.white.withValues(alpha: 0.10),
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        active && claimedToday
+                            ? Icons.verified
+                            : Icons.card_giftcard,
+                        color: const Color(0xffffd166),
+                        size: 20,
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        reward.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 11,
+                        ),
+                      ),
+                      Text(
+                        reward.summary,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white60,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _DockAction extends StatelessWidget {
   const _DockAction({
     required this.icon,
@@ -2440,6 +2719,7 @@ class _PlayScreenState extends State<PlayScreen>
   late final Ticker _ticker;
   late GameLevel _level;
   late GameRun _run;
+  GameRun? _completedRun;
   Duration _lastTick = Duration.zero;
   bool _scoreSubmitted = false;
   bool _showTutorial = false;
@@ -2472,6 +2752,7 @@ class _PlayScreenState extends State<PlayScreen>
     final safeIndex = index.clamp(0, GameLevel.samples.length - 1);
     _level = GameLevel.samples[safeIndex];
     _run = GameRun(level: _level);
+    _completedRun = null;
     _lastTick = Duration.zero;
     _scoreSubmitted = false;
   }
@@ -2518,7 +2799,8 @@ class _PlayScreenState extends State<PlayScreen>
       ).timeout(const Duration(seconds: 4), onTimeout: () {}),
     );
     if (!mounted) return;
-    await Future<void>.delayed(const Duration(milliseconds: 1850));
+    setState(() => _completedRun = finishedRun);
+    await Future<void>.delayed(const Duration(milliseconds: 2450));
     if (!mounted) return;
     final next = finishedLevel.index + 1;
     if (next < GameLevel.samples.length) {
@@ -2676,6 +2958,13 @@ class _PlayScreenState extends State<PlayScreen>
             Positioned.fill(
               child: GameTutorialOverlay(onClose: _dismissTutorial),
             ),
+          if (_completedRun != null)
+            Positioned.fill(
+              child: LevelRewardOverlay(
+                run: _completedRun!,
+                premium: widget.premium,
+              ),
+            ),
         ],
       ),
     );
@@ -2809,6 +3098,52 @@ class DailyQuest {
       target: 6,
       rewardCoins: 150,
       icon: Icons.star,
+    ),
+  ];
+}
+
+class DailyReward {
+  const DailyReward({
+    required this.title,
+    required this.coins,
+    this.routeJokers = 0,
+    this.breakerJokers = 0,
+    this.keyJokers = 0,
+  });
+
+  final String title;
+  final int coins;
+  final int routeJokers;
+  final int breakerJokers;
+  final int keyJokers;
+
+  String get summary {
+    final parts = <String>[];
+    if (coins > 0) parts.add('$coins coin');
+    if (routeJokers > 0) parts.add('$routeJokers rota');
+    if (breakerJokers > 0) parts.add('$breakerJokers kirici');
+    if (keyJokers > 0) parts.add('$keyJokers anahtar');
+    return parts.join(' + ');
+  }
+
+  static DailyReward rewardFor(DateTime date) {
+    final index = date.difference(DateTime(2026)).inDays.abs() % rewards.length;
+    return rewards[index];
+  }
+
+  static const rewards = [
+    DailyReward(title: 'Gun 1', coins: 55),
+    DailyReward(title: 'Gun 2', coins: 70, routeJokers: 1),
+    DailyReward(title: 'Gun 3', coins: 80, keyJokers: 1),
+    DailyReward(title: 'Gun 4', coins: 95, breakerJokers: 1),
+    DailyReward(title: 'Gun 5', coins: 120),
+    DailyReward(title: 'Gun 6', coins: 140, routeJokers: 1, keyJokers: 1),
+    DailyReward(
+      title: 'Buyuk Gun',
+      coins: 180,
+      routeJokers: 1,
+      breakerJokers: 1,
+      keyJokers: 1,
     ),
   ];
 }
@@ -3410,6 +3745,7 @@ class StoreScreen extends StatelessWidget {
     required this.ownedSkins,
     required this.onEquipSkin,
     required this.onBuySkin,
+    required this.onBuyJokerPack,
     required this.onActivatePremium,
     required this.onBack,
   });
@@ -3420,6 +3756,7 @@ class StoreScreen extends StatelessWidget {
   final Set<BallSkin> ownedSkins;
   final ValueChanged<BallSkin> onEquipSkin;
   final ValueChanged<BallSkin> onBuySkin;
+  final ValueChanged<PowerUpKind> onBuyJokerPack;
   final VoidCallback onActivatePremium;
   final VoidCallback onBack;
 
@@ -3450,27 +3787,29 @@ class StoreScreen extends StatelessWidget {
           onTap: premium ? null : onActivatePremium,
         ),
         const SizedBox(height: 10),
-        const StoreOffer(
+        StoreOffer(
           icon: Icons.track_changes,
           title: 'Rota Jokeri',
-          body:
-              'Baslangicta 3 adet. Topu potaya dogru guclu sekilde yonlendirir.',
-          action: 'Oyun icinde',
+          body: 'Topu potaya dogru guclu sekilde yonlendirir. 3 adetlik paket.',
+          action: '180c',
+          onTap: coins >= 180 ? () => onBuyJokerPack(PowerUpKind.route) : null,
         ),
         const SizedBox(height: 10),
-        const StoreOffer(
+        StoreOffer(
           icon: Icons.hardware,
           title: 'Kirici Joker',
-          body:
-              'Baslangicta 3 adet. En yakin duvar veya engeli sahadan kaldirir.',
-          action: 'Oyun icinde',
+          body: 'En yakin duvar veya engeli sahadan kaldirir. 3 adetlik paket.',
+          action: '180c',
+          onTap:
+              coins >= 180 ? () => onBuyJokerPack(PowerUpKind.breaker) : null,
         ),
         const SizedBox(height: 10),
-        const StoreOffer(
+        StoreOffer(
           icon: Icons.key,
           title: 'Anahtar Jokeri',
-          body: 'Baslangicta 3 adet. En yakin kapinin kilidini direkt acar.',
-          action: 'Oyun icinde',
+          body: 'En yakin kapinin kilidini direkt acar. 3 adetlik paket.',
+          action: '180c',
+          onTap: coins >= 180 ? () => onBuyJokerPack(PowerUpKind.key) : null,
         ),
         const SizedBox(height: 10),
         const StoreOffer(
@@ -3704,6 +4043,140 @@ class HowToPlayScreen extends StatelessWidget {
   }
 }
 
+class LevelRewardOverlay extends StatelessWidget {
+  const LevelRewardOverlay({
+    super.key,
+    required this.run,
+    required this.premium,
+  });
+
+  final GameRun run;
+  final bool premium;
+
+  @override
+  Widget build(BuildContext context) {
+    final baseCoins = 45 + run.level.index * 7 + run.collectedCoins * 18;
+    final coins = premium ? baseCoins * 2 : baseCoins;
+    final xp =
+        35 +
+        run.starRating * 24 +
+        run.collectedCoins * 6 +
+        run.level.index ~/ 4;
+    return IgnorePointer(
+      child: AnimatedOpacity(
+        opacity: 1,
+        duration: const Duration(milliseconds: 220),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.46),
+          ),
+          child: Center(
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.88, end: 1),
+              duration: const Duration(milliseconds: 420),
+              curve: Curves.easeOutBack,
+              builder:
+                  (context, scale, child) =>
+                      Transform.scale(scale: scale, child: child),
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.symmetric(horizontal: 26),
+                constraints: const BoxConstraints(maxWidth: 390),
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xff18231f), Color(0xff0b1118)],
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xffffd166)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xffffd166).withValues(alpha: 0.18),
+                      blurRadius: 36,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.sports_basketball,
+                      color: Color(0xffff8a2a),
+                      size: 42,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      run.perfectShot ? 'Mukemmel Basket!' : 'Bolum Gecildi!',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        3,
+                        (index) => Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 3),
+                          child: Icon(
+                            index < run.starRating
+                                ? Icons.star
+                                : Icons.star_border,
+                            color: const Color(0xffffd166),
+                            size: 34,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _RewardChip(icon: Icons.attach_money, label: '+$coins'),
+                        _RewardChip(icon: Icons.bolt, label: '+$xp XP'),
+                        _RewardChip(
+                          icon: Icons.control_camera,
+                          label: '${run.remainingNudges} kontrol',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Sonraki bolum yukleniyor...',
+                      style: TextStyle(color: Colors.white60),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RewardChip extends StatelessWidget {
+  const _RewardChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      avatar: Icon(icon, size: 16),
+      label: Text(label),
+      backgroundColor: const Color(0xff17251f),
+      side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+    );
+  }
+}
+
 class AccountScreen extends StatefulWidget {
   const AccountScreen({
     super.key,
@@ -3711,6 +4184,14 @@ class AccountScreen extends StatefulWidget {
     required this.playerName,
     required this.email,
     required this.canDeleteAccount,
+    required this.coins,
+    required this.premium,
+    required this.seasonXp,
+    required this.bestStreak,
+    required this.currentStreak,
+    required this.totalStars,
+    required this.totalWins,
+    required this.activeSkin,
     required this.onSignOut,
     required this.onChanged,
     required this.onBack,
@@ -3720,6 +4201,14 @@ class AccountScreen extends StatefulWidget {
   final String playerName;
   final String email;
   final bool canDeleteAccount;
+  final int coins;
+  final bool premium;
+  final int seasonXp;
+  final int bestStreak;
+  final int currentStreak;
+  final int totalStars;
+  final int totalWins;
+  final BallSkin activeSkin;
   final Future<void> Function() onSignOut;
   final ValueChanged<String> onChanged;
   final VoidCallback onBack;
@@ -3857,6 +4346,7 @@ class _AccountScreenState extends State<AccountScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final league = PlayerLeague.fromXp(widget.seasonXp);
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
       children: [
@@ -3870,6 +4360,65 @@ class _AccountScreenState extends State<AccountScreen> {
               icon: const Icon(Icons.arrow_back),
             ),
           ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xff111827),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: league.color.withValues(alpha: 0.38)),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: widget.activeSkin.base,
+                    foregroundColor: Colors.black,
+                    child: Icon(league.icon),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${league.name} Ligi',
+                          style: const TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                        Text(
+                          '${widget.seasonXp} XP | ${widget.activeSkin.title} top',
+                          style: const TextStyle(color: Colors.white70),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Chip(
+                    avatar: Icon(
+                      widget.premium
+                          ? Icons.workspace_premium
+                          : Icons.sports_basketball,
+                      size: 16,
+                    ),
+                    label: Text(widget.premium ? 'Premium' : 'Standart'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _ProfileStat(label: 'Coin', value: '${widget.coins}'),
+                  _ProfileStat(label: 'Yildiz', value: '${widget.totalStars}'),
+                  _ProfileStat(label: 'Bitis', value: '${widget.totalWins}'),
+                  _ProfileStat(label: 'Seri', value: '${widget.currentStreak}'),
+                  _ProfileStat(label: 'En iyi', value: '${widget.bestStreak}'),
+                ],
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         TextField(
@@ -6180,6 +6729,42 @@ class GameLevel {
   }
 }
 
+class _ProfileStat extends StatelessWidget {
+  const _ProfileStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 88,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.24),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white54, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 enum ObstacleKind { gate, wall, bumper, fanLeft, fanRight, boost, gravity }
 
 class GameObstacle {
@@ -6289,6 +6874,9 @@ class GameBackend {
         dailyExpired ? 0 : prefs.getInt('daily_claims_$uid') ?? 0;
     final localBestStreak = prefs.getInt('best_streak_$uid') ?? 0;
     final localCurrentStreak = prefs.getInt('current_streak_$uid') ?? 0;
+    final localTotalStars = prefs.getInt('total_stars_$uid') ?? 0;
+    final localTotalWins = prefs.getInt('total_wins_$uid') ?? 0;
+    final localLoginRewardKey = prefs.getString('login_reward_$uid') ?? '';
     final localActiveSkin = BallSkin.fromId(
       prefs.getString('active_skin_$uid'),
     );
@@ -6312,6 +6900,9 @@ class GameBackend {
         dailyClaimMask: localDailyClaimMask,
         bestStreak: localBestStreak,
         currentStreak: localCurrentStreak,
+        totalStars: localTotalStars,
+        totalWins: localTotalWins,
+        lastLoginRewardKey: localLoginRewardKey,
         activeSkin:
             localOwnedSkins.contains(localActiveSkin)
                 ? localActiveSkin
@@ -6347,6 +6938,10 @@ class GameBackend {
               : data['dailyClaimMask'] as int? ?? localDailyClaimMask;
       final bestStreak = data['bestStreak'] as int? ?? localBestStreak;
       final currentStreak = data['currentStreak'] as int? ?? localCurrentStreak;
+      final totalStars = data['totalStars'] as int? ?? localTotalStars;
+      final totalWins = data['totalWins'] as int? ?? localTotalWins;
+      final loginRewardKey =
+          data['lastLoginRewardKey'] as String? ?? localLoginRewardKey;
       final ownedSkins =
           ((data['ownedSkins'] as List?)?.whereType<String>().toList() ??
                   localOwnedSkins.map((item) => item.id).toList())
@@ -6367,6 +6962,9 @@ class GameBackend {
       await prefs.setInt('daily_claims_$uid', dailyClaimMask);
       await prefs.setInt('best_streak_$uid', bestStreak);
       await prefs.setInt('current_streak_$uid', currentStreak);
+      await prefs.setInt('total_stars_$uid', totalStars);
+      await prefs.setInt('total_wins_$uid', totalWins);
+      await prefs.setString('login_reward_$uid', loginRewardKey);
       await prefs.setString(
         'active_skin_$uid',
         ownedSkins.contains(activeSkin) ? activeSkin.id : BallSkin.classic.id,
@@ -6389,6 +6987,9 @@ class GameBackend {
         dailyClaimMask: dailyClaimMask,
         bestStreak: bestStreak,
         currentStreak: currentStreak,
+        totalStars: totalStars,
+        totalWins: totalWins,
+        lastLoginRewardKey: loginRewardKey,
         activeSkin:
             ownedSkins.contains(activeSkin) ? activeSkin : BallSkin.classic,
         ownedSkins: ownedSkins,
@@ -6408,6 +7009,9 @@ class GameBackend {
         dailyClaimMask: localDailyClaimMask,
         bestStreak: localBestStreak,
         currentStreak: localCurrentStreak,
+        totalStars: localTotalStars,
+        totalWins: localTotalWins,
+        lastLoginRewardKey: localLoginRewardKey,
         activeSkin:
             localOwnedSkins.contains(localActiveSkin)
                 ? localActiveSkin
@@ -6432,6 +7036,9 @@ class GameBackend {
     required int dailyClaimMask,
     required int bestStreak,
     required int currentStreak,
+    required int totalStars,
+    required int totalWins,
+    required String lastLoginRewardKey,
     required BallSkin activeSkin,
     required Set<BallSkin> ownedSkins,
   }) async {
@@ -6453,6 +7060,9 @@ class GameBackend {
     await prefs.setInt('daily_claims_$uid', dailyClaimMask);
     await prefs.setInt('best_streak_$uid', bestStreak);
     await prefs.setInt('current_streak_$uid', currentStreak);
+    await prefs.setInt('total_stars_$uid', totalStars);
+    await prefs.setInt('total_wins_$uid', totalWins);
+    await prefs.setString('login_reward_$uid', lastLoginRewardKey);
     await prefs.setString('active_skin_$uid', safeActive.id);
     await prefs.setStringList(
       'owned_skins_$uid',
@@ -6473,6 +7083,9 @@ class GameBackend {
       'dailyClaimMask': dailyClaimMask,
       'bestStreak': bestStreak,
       'currentStreak': currentStreak,
+      'totalStars': totalStars,
+      'totalWins': totalWins,
+      'lastLoginRewardKey': lastLoginRewardKey,
       'activeSkin': safeActive.id,
       'ownedSkins': safeOwned.map((item) => item.id).toList(),
       'updatedAt': FieldValue.serverTimestamp(),
@@ -6497,6 +7110,19 @@ class GameBackend {
       prefs.remove('route_jokers_$uid'),
       prefs.remove('breaker_jokers_$uid'),
       prefs.remove('key_jokers_$uid'),
+      prefs.remove('season_xp_$uid'),
+      prefs.remove('daily_key_$uid'),
+      prefs.remove('daily_wins_$uid'),
+      prefs.remove('daily_bonus_$uid'),
+      prefs.remove('daily_stars_$uid'),
+      prefs.remove('daily_claims_$uid'),
+      prefs.remove('best_streak_$uid'),
+      prefs.remove('current_streak_$uid'),
+      prefs.remove('total_stars_$uid'),
+      prefs.remove('total_wins_$uid'),
+      prefs.remove('login_reward_$uid'),
+      prefs.remove('active_skin_$uid'),
+      prefs.remove('owned_skins_$uid'),
     ]);
     if (!_canSync(uid)) return;
     final firestore = FirebaseFirestore.instance;
@@ -6701,6 +7327,9 @@ class GameEconomy {
     required this.dailyClaimMask,
     required this.bestStreak,
     required this.currentStreak,
+    required this.totalStars,
+    required this.totalWins,
+    required this.lastLoginRewardKey,
     required this.activeSkin,
     required this.ownedSkins,
   });
@@ -6718,6 +7347,9 @@ class GameEconomy {
   final int dailyClaimMask;
   final int bestStreak;
   final int currentStreak;
+  final int totalStars;
+  final int totalWins;
+  final String lastLoginRewardKey;
   final BallSkin activeSkin;
   final Set<BallSkin> ownedSkins;
 }
@@ -7289,6 +7921,7 @@ class LevelSelector extends StatelessWidget {
           final level = GameLevel.samples[index];
           final selected = selectedIndex == index;
           final locked = index > unlockedIndex;
+          final showdown = (index + 1) % 10 == 0;
           return SizedBox(
             width: 156,
             child: InkWell(
@@ -7314,6 +7947,14 @@ class LevelSelector extends StatelessWidget {
                       children: [
                         Text('Bolum ${index + 1}'),
                         const Spacer(),
+                        if (showdown) ...[
+                          const Icon(
+                            Icons.local_fire_department,
+                            size: 15,
+                            color: Color(0xffff8a2a),
+                          ),
+                          const SizedBox(width: 4),
+                        ],
                         Icon(locked ? Icons.lock : Icons.lock_open, size: 16),
                       ],
                     ),

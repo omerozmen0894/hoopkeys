@@ -18,7 +18,8 @@ service cloud.firestore {
           'routeJokers', 'breakerJokers', 'keyJokers', 'seasonXp',
           'dailyKey', 'dailyWins', 'dailyBonusCoins', 'dailyStars',
           'dailyClaimMask', 'bestStreak', 'currentStreak', 'activeSkin',
-          'ownedSkins', 'updatedAt'
+          'totalStars', 'totalWins', 'lastLoginRewardKey', 'ownedSkins',
+          'updatedAt'
         ]);
       allow delete: if owns(uid);
     }
