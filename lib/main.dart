@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'firebase_options.dart';
@@ -531,8 +532,14 @@ class _GameShellState extends State<GameShell> {
   int _totalStars = 0;
   int _totalWins = 0;
   String _lastLoginRewardKey = '';
+  int _lives = 5;
+  String _lastLifeRefillIso = '';
+  int _achievementMask = 0;
+  String _seasonRewardKey = '';
   BallSkin _activeSkin = BallSkin.classic;
   Set<BallSkin> _ownedSkins = {BallSkin.classic};
+  CourtTheme _activeCourtTheme = CourtTheme.classic;
+  Set<CourtTheme> _ownedCourtThemes = {CourtTheme.classic};
   bool _premium = false;
   String _playerName = 'Oyuncu';
 
@@ -573,11 +580,18 @@ class _GameShellState extends State<GameShell> {
       _totalStars = economy.totalStars;
       _totalWins = economy.totalWins;
       _lastLoginRewardKey = economy.lastLoginRewardKey;
+      _lives = economy.lives;
+      _lastLifeRefillIso = economy.lastLifeRefillIso;
+      _achievementMask = economy.achievementMask;
+      _seasonRewardKey = economy.seasonRewardKey;
       _activeSkin = economy.activeSkin;
       _ownedSkins = economy.ownedSkins;
+      _activeCourtTheme = economy.activeCourtTheme;
+      _ownedCourtThemes = economy.ownedCourtThemes;
       _premium = economy.premium;
     });
     unawaited(_claimLoginRewardIfNeeded());
+    unawaited(_claimSeasonRewardIfReady());
   }
 
   Future<void> _unlockNext(int finishedLevel) async {
@@ -607,8 +621,14 @@ class _GameShellState extends State<GameShell> {
       totalStars: _totalStars,
       totalWins: _totalWins,
       lastLoginRewardKey: _lastLoginRewardKey,
+      lives: _lives,
+      lastLifeRefillIso: _lastLifeRefillIso,
+      achievementMask: _achievementMask,
+      seasonRewardKey: _seasonRewardKey,
       activeSkin: _activeSkin,
       ownedSkins: _ownedSkins,
+      activeCourtTheme: _activeCourtTheme,
+      ownedCourtThemes: _ownedCourtThemes,
     );
     if (mounted) setState(() => _coins = coins);
   }
@@ -631,8 +651,14 @@ class _GameShellState extends State<GameShell> {
       totalStars: _totalStars,
       totalWins: _totalWins,
       lastLoginRewardKey: _lastLoginRewardKey,
+      lives: _lives,
+      lastLifeRefillIso: _lastLifeRefillIso,
+      achievementMask: _achievementMask,
+      seasonRewardKey: _seasonRewardKey,
       activeSkin: _activeSkin,
       ownedSkins: _ownedSkins,
+      activeCourtTheme: _activeCourtTheme,
+      ownedCourtThemes: _ownedCourtThemes,
     );
     if (mounted) setState(() => _premium = true);
   }
@@ -649,6 +675,22 @@ class _GameShellState extends State<GameShell> {
       _coins -= skin.price;
       _ownedSkins = {..._ownedSkins, skin};
       _activeSkin = skin;
+    });
+    await _saveEconomySnapshot();
+  }
+
+  Future<void> _equipCourtTheme(CourtTheme theme) async {
+    if (!_ownedCourtThemes.contains(theme)) return;
+    setState(() => _activeCourtTheme = theme);
+    await _saveEconomySnapshot();
+  }
+
+  Future<void> _buyCourtTheme(CourtTheme theme) async {
+    if (_ownedCourtThemes.contains(theme) || _coins < theme.price) return;
+    setState(() {
+      _coins -= theme.price;
+      _ownedCourtThemes = {..._ownedCourtThemes, theme};
+      _activeCourtTheme = theme;
     });
     await _saveEconomySnapshot();
   }
@@ -685,8 +727,21 @@ class _GameShellState extends State<GameShell> {
       _bestStreak = math.max(_bestStreak, streak);
       _totalWins += 1;
       _totalStars += run.starRating;
+      _lives = math.min(
+        GameEconomy.maxLives,
+        _lives + (run.starRating == 3 ? 1 : 0),
+      );
+      _achievementMask = AchievementRule.updatedMask(
+        currentMask: _achievementMask,
+        totalWins: _totalWins,
+        totalStars: _totalStars,
+        bestStreak: _bestStreak,
+        ownedSkins: _ownedSkins.length + _ownedCourtThemes.length,
+        run: run,
+      );
       if (reward > 0) _coins += reward;
     });
+    unawaited(_backend.submitLevelTelemetry(level: level, run: run));
     await _saveEconomySnapshot(
       dailyKey: today,
       dailyWins: wins,
@@ -723,9 +778,34 @@ class _GameShellState extends State<GameShell> {
       totalStars: _totalStars,
       totalWins: _totalWins,
       lastLoginRewardKey: _lastLoginRewardKey,
+      lives: _lives,
+      lastLifeRefillIso: _lastLifeRefillIso,
+      achievementMask: _achievementMask,
+      seasonRewardKey: _seasonRewardKey,
       activeSkin: _activeSkin,
       ownedSkins: _ownedSkins,
+      activeCourtTheme: _activeCourtTheme,
+      ownedCourtThemes: _ownedCourtThemes,
     );
+  }
+
+  Future<void> _claimSeasonRewardIfReady() async {
+    final key = SeasonReward.currentKey();
+    if (_seasonRewardKey == key || _seasonXp < 550) return;
+    final reward = SeasonReward.forXp(_seasonXp);
+    if (!mounted) return;
+    setState(() {
+      _seasonRewardKey = key;
+      _coins += reward.coins;
+      _routeJokers += reward.routeJokers;
+      _breakerJokers += reward.breakerJokers;
+      _keyJokers += reward.keyJokers;
+    });
+    await _saveEconomySnapshot();
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Sezon odulu: ${reward.summary}')));
   }
 
   Future<void> _claimLoginRewardIfNeeded() async {
@@ -739,6 +819,7 @@ class _GameShellState extends State<GameShell> {
       _routeJokers += reward.routeJokers;
       _breakerJokers += reward.breakerJokers;
       _keyJokers += reward.keyJokers;
+      _lives = math.min(GameEconomy.maxLives, _lives + 1);
     });
     await _saveEconomySnapshot();
     if (!mounted) return;
@@ -761,6 +842,14 @@ class _GameShellState extends State<GameShell> {
           _keyJokers += 3;
       }
     });
+    await _saveEconomySnapshot();
+  }
+
+  Future<void> _loseLife(GameLevel level, GameRun run) async {
+    if (_lives <= 0) return;
+    setState(() => _lives -= 1);
+    HapticFeedback.mediumImpact();
+    unawaited(_backend.submitLevelTelemetry(level: level, run: run));
     await _saveEconomySnapshot();
   }
 
@@ -793,8 +882,14 @@ class _GameShellState extends State<GameShell> {
             totalStars: _totalStars,
             totalWins: _totalWins,
             lastLoginRewardKey: _lastLoginRewardKey,
+            lives: _lives,
+            lastLifeRefillIso: _lastLifeRefillIso,
+            achievementMask: _achievementMask,
+            seasonRewardKey: _seasonRewardKey,
             activeSkin: _activeSkin,
             ownedSkins: _ownedSkins,
+            activeCourtTheme: _activeCourtTheme,
+            ownedCourtThemes: _ownedCourtThemes,
           )
           .timeout(const Duration(seconds: 3), onTimeout: () {}),
     );
@@ -805,6 +900,15 @@ class _GameShellState extends State<GameShell> {
   Widget build(BuildContext context) {
     void goMenu() => setState(() => _tab = 0);
     void continueGame() {
+      if (_lives <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Can bitti. Gunluk odul veya marketten destek al.'),
+          ),
+        );
+        setState(() => _tab = 4);
+        return;
+      }
       setState(() {
         _selectedLevelIndex = _unlockedLevelIndex;
         _tab = 1;
@@ -836,6 +940,9 @@ class _GameShellState extends State<GameShell> {
                 totalStars: _totalStars,
                 totalWins: _totalWins,
                 lastLoginRewardKey: _lastLoginRewardKey,
+                lives: _lives,
+                achievementMask: _achievementMask,
+                seasonRewardKey: _seasonRewardKey,
                 onOpen: (value) => setState(() => _tab = value),
                 onContinue: continueGame,
               ),
@@ -848,12 +955,14 @@ class _GameShellState extends State<GameShell> {
                 keyJokers: _keyJokers,
                 premium: _premium,
                 activeSkin: _activeSkin,
+                activeCourtTheme: _activeCourtTheme,
                 selectedLevelIndex: _selectedLevelIndex,
                 unlockedLevelIndex: _unlockedLevelIndex,
                 onLevelSelected:
                     (value) => setState(() => _selectedLevelIndex = value),
                 onLevelCompleted: _unlockNext,
                 onRunCompleted: _recordLevelFinish,
+                onRunFailed: _loseLife,
                 onCoinsEarned: _addCoins,
                 onSpendJoker: _spendJoker,
                 onBack: goMenu,
@@ -872,8 +981,12 @@ class _GameShellState extends State<GameShell> {
                 premium: _premium,
                 activeSkin: _activeSkin,
                 ownedSkins: _ownedSkins,
+                activeCourtTheme: _activeCourtTheme,
+                ownedCourtThemes: _ownedCourtThemes,
                 onEquipSkin: _equipSkin,
                 onBuySkin: _buySkin,
+                onEquipCourtTheme: _equipCourtTheme,
+                onBuyCourtTheme: _buyCourtTheme,
                 onBuyJokerPack: _buyJokerPack,
                 onActivatePremium: _activatePremium,
                 onBack: goMenu,
@@ -891,6 +1004,8 @@ class _GameShellState extends State<GameShell> {
                 currentStreak: _currentStreak,
                 totalStars: _totalStars,
                 totalWins: _totalWins,
+                lives: _lives,
+                achievementMask: _achievementMask,
                 activeSkin: _activeSkin,
                 onSignOut: () => _signOut(context),
                 onChanged: (value) => setState(() => _playerName = value),
@@ -934,6 +1049,9 @@ class MainMenuScreen extends StatelessWidget {
     required this.totalStars,
     required this.totalWins,
     required this.lastLoginRewardKey,
+    required this.lives,
+    required this.achievementMask,
+    required this.seasonRewardKey,
     required this.onOpen,
     required this.onContinue,
   });
@@ -952,6 +1070,9 @@ class MainMenuScreen extends StatelessWidget {
   final int totalStars;
   final int totalWins;
   final String lastLoginRewardKey;
+  final int lives;
+  final int achievementMask;
+  final String seasonRewardKey;
   final ValueChanged<int> onOpen;
   final VoidCallback onContinue;
 
@@ -972,6 +1093,9 @@ class MainMenuScreen extends StatelessWidget {
       totalStars: totalStars,
       totalWins: totalWins,
       lastLoginRewardKey: lastLoginRewardKey,
+      lives: lives,
+      achievementMask: achievementMask,
+      seasonRewardKey: seasonRewardKey,
       onOpen: onOpen,
       onContinue: onContinue,
     );
@@ -1062,6 +1186,9 @@ class GameLobbyMenu extends StatelessWidget {
     required this.totalStars,
     required this.totalWins,
     required this.lastLoginRewardKey,
+    required this.lives,
+    required this.achievementMask,
+    required this.seasonRewardKey,
     required this.onOpen,
     required this.onContinue,
   });
@@ -1080,6 +1207,9 @@ class GameLobbyMenu extends StatelessWidget {
   final int totalStars;
   final int totalWins;
   final String lastLoginRewardKey;
+  final int lives;
+  final int achievementMask;
+  final String seasonRewardKey;
   final ValueChanged<int> onOpen;
   final VoidCallback onContinue;
 
@@ -1124,6 +1254,7 @@ class GameLobbyMenu extends StatelessWidget {
                         seasonXp: seasonXp,
                         bestStreak: bestStreak,
                         activeSkin: activeSkin,
+                        seasonRewardKey: seasonRewardKey,
                       ),
                       const SizedBox(height: 12),
                       _DailyQuestPanel(
@@ -1142,6 +1273,8 @@ class GameLobbyMenu extends StatelessWidget {
                         totalStars: totalStars,
                         totalWins: totalWins,
                         unlockedLevelIndex: unlockedLevelIndex,
+                        lives: lives,
+                        achievementMask: achievementMask,
                       ),
                       const SizedBox(height: 12),
                       Container(
@@ -1847,15 +1980,19 @@ class _SeasonLeagueStrip extends StatelessWidget {
     required this.seasonXp,
     required this.bestStreak,
     required this.activeSkin,
+    required this.seasonRewardKey,
   });
 
   final int seasonXp;
   final int bestStreak;
   final BallSkin activeSkin;
+  final String seasonRewardKey;
 
   @override
   Widget build(BuildContext context) {
     final league = PlayerLeague.fromXp(seasonXp);
+    final rewardReady =
+        seasonXp >= 550 && seasonRewardKey != SeasonReward.currentKey();
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1901,7 +2038,9 @@ class _SeasonLeagueStrip extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w900),
               ),
               Text(
-                'Seri $bestStreak | ${activeSkin.title}',
+                rewardReady
+                    ? 'Odul hazir | Seri $bestStreak'
+                    : 'Seri $bestStreak | ${activeSkin.title}',
                 style: const TextStyle(color: Colors.white60, fontSize: 11),
               ),
             ],
@@ -2005,18 +2144,27 @@ class _PlayerProfileStrip extends StatelessWidget {
     required this.totalStars,
     required this.totalWins,
     required this.unlockedLevelIndex,
+    required this.lives,
+    required this.achievementMask,
   });
 
   final int totalStars;
   final int totalWins;
   final int unlockedLevelIndex;
+  final int lives;
+  final int achievementMask;
 
   @override
   Widget build(BuildContext context) {
     final items = [
+      (Icons.favorite, '$lives/${GameEconomy.maxLives}', 'Can'),
       (Icons.star, '$totalStars', 'Yildiz'),
       (Icons.sports_score, '$totalWins', 'Bitis'),
-      (Icons.route, '${unlockedLevelIndex + 1}', 'Bolum'),
+      (
+        Icons.emoji_events,
+        '${AchievementRule.completedCount(achievementMask)}',
+        'Rozet',
+      ),
     ];
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -2683,11 +2831,13 @@ class PlayScreen extends StatefulWidget {
     required this.keyJokers,
     required this.premium,
     required this.activeSkin,
+    required this.activeCourtTheme,
     required this.selectedLevelIndex,
     required this.unlockedLevelIndex,
     required this.onLevelSelected,
     required this.onLevelCompleted,
     required this.onRunCompleted,
+    required this.onRunFailed,
     required this.onCoinsEarned,
     required this.onSpendJoker,
     required this.onBack,
@@ -2701,11 +2851,13 @@ class PlayScreen extends StatefulWidget {
   final int keyJokers;
   final bool premium;
   final BallSkin activeSkin;
+  final CourtTheme activeCourtTheme;
   final int selectedLevelIndex;
   final int unlockedLevelIndex;
   final ValueChanged<int> onLevelSelected;
   final Future<void> Function(int levelIndex) onLevelCompleted;
   final Future<void> Function(GameLevel level, GameRun run) onRunCompleted;
+  final Future<void> Function(GameLevel level, GameRun run) onRunFailed;
   final Future<void> Function(int coins) onCoinsEarned;
   final Future<bool> Function(PowerUpKind kind) onSpendJoker;
   final VoidCallback onBack;
@@ -2722,6 +2874,7 @@ class _PlayScreenState extends State<PlayScreen>
   GameRun? _completedRun;
   Duration _lastTick = Duration.zero;
   bool _scoreSubmitted = false;
+  bool _failSubmitted = false;
   bool _showTutorial = false;
   bool _tutorialChecked = false;
 
@@ -2755,6 +2908,7 @@ class _PlayScreenState extends State<PlayScreen>
     _completedRun = null;
     _lastTick = Duration.zero;
     _scoreSubmitted = false;
+    _failSubmitted = false;
   }
 
   Future<void> _maybeShowTutorial() async {
@@ -2784,7 +2938,13 @@ class _PlayScreenState extends State<PlayScreen>
     final changed = _run.step(dt.clamp(0, 0.033).toDouble());
     if (_run.won && !_scoreSubmitted) {
       _scoreSubmitted = true;
+      HapticFeedback.heavyImpact();
+      SystemSound.play(SystemSoundType.click);
       unawaited(_finishLevel());
+    }
+    if (_run.failed && !_failSubmitted) {
+      _failSubmitted = true;
+      unawaited(widget.onRunFailed(_level, _run));
     }
     if (changed) setState(() {});
   }
@@ -2899,6 +3059,7 @@ class _PlayScreenState extends State<PlayScreen>
                               child: GameBoard(
                                 run: _run,
                                 skin: widget.activeSkin,
+                                courtTheme: widget.activeCourtTheme,
                                 onNudge:
                                     (force) =>
                                         setState(() => _run.nudge(force)),
@@ -3062,6 +3223,69 @@ enum BallSkin {
   );
 }
 
+enum CourtTheme {
+  classic,
+  neonNight,
+  street,
+  proArena;
+
+  String get id => name;
+
+  String get title => switch (this) {
+    CourtTheme.classic => 'Klasik Parke',
+    CourtTheme.neonNight => 'Neon Gece',
+    CourtTheme.street => 'Sokak Sahasi',
+    CourtTheme.proArena => 'Pro Arena',
+  };
+
+  int get price => switch (this) {
+    CourtTheme.classic => 0,
+    CourtTheme.neonNight => 700,
+    CourtTheme.street => 520,
+    CourtTheme.proArena => 980,
+  };
+
+  Color get top => switch (this) {
+    CourtTheme.classic => const Color(0xffb9793c),
+    CourtTheme.neonNight => const Color(0xff14213d),
+    CourtTheme.street => const Color(0xff475569),
+    CourtTheme.proArena => const Color(0xff2f1d10),
+  };
+
+  Color get mid => switch (this) {
+    CourtTheme.classic => const Color(0xff8d5427),
+    CourtTheme.neonNight => const Color(0xff07111f),
+    CourtTheme.street => const Color(0xff334155),
+    CourtTheme.proArena => const Color(0xff7c2d12),
+  };
+
+  Color get bottom => switch (this) {
+    CourtTheme.classic => const Color(0xff5b3217),
+    CourtTheme.neonNight => const Color(0xff111827),
+    CourtTheme.street => const Color(0xff1f2937),
+    CourtTheme.proArena => const Color(0xff111827),
+  };
+
+  Color get line => switch (this) {
+    CourtTheme.classic => const Color(0xfffff1c7),
+    CourtTheme.neonNight => const Color(0xff67e8f9),
+    CourtTheme.street => const Color(0xffe2e8f0),
+    CourtTheme.proArena => const Color(0xffffd166),
+  };
+
+  Color get accent => switch (this) {
+    CourtTheme.classic => const Color(0xffffd166),
+    CourtTheme.neonNight => const Color(0xff19f5a8),
+    CourtTheme.street => const Color(0xffff8a2a),
+    CourtTheme.proArena => const Color(0xffffd166),
+  };
+
+  static CourtTheme fromId(String? id) => CourtTheme.values.firstWhere(
+    (item) => item.id == id,
+    orElse: () => CourtTheme.classic,
+  );
+}
+
 class DailyQuest {
   const DailyQuest({
     required this.title,
@@ -3146,6 +3370,132 @@ class DailyReward {
       keyJokers: 1,
     ),
   ];
+}
+
+class SeasonReward {
+  const SeasonReward({
+    required this.coins,
+    required this.routeJokers,
+    required this.breakerJokers,
+    required this.keyJokers,
+  });
+
+  final int coins;
+  final int routeJokers;
+  final int breakerJokers;
+  final int keyJokers;
+
+  String get summary =>
+      '$coins coin + $routeJokers rota + $breakerJokers kirici + $keyJokers anahtar';
+
+  static String currentKey([DateTime? now]) {
+    final date = now ?? DateTime.now();
+    final week = ((date.difference(DateTime(date.year)).inDays) / 7).floor();
+    return '${date.year}-w$week';
+  }
+
+  static SeasonReward forXp(int xp) {
+    if (xp >= 5200) {
+      return const SeasonReward(
+        coins: 900,
+        routeJokers: 3,
+        breakerJokers: 3,
+        keyJokers: 3,
+      );
+    }
+    if (xp >= 2800) {
+      return const SeasonReward(
+        coins: 620,
+        routeJokers: 2,
+        breakerJokers: 2,
+        keyJokers: 2,
+      );
+    }
+    if (xp >= 1400) {
+      return const SeasonReward(
+        coins: 420,
+        routeJokers: 2,
+        breakerJokers: 1,
+        keyJokers: 2,
+      );
+    }
+    return const SeasonReward(
+      coins: 220,
+      routeJokers: 1,
+      breakerJokers: 1,
+      keyJokers: 1,
+    );
+  }
+}
+
+class AchievementRule {
+  const AchievementRule({
+    required this.title,
+    required this.icon,
+    required this.description,
+  });
+
+  final String title;
+  final IconData icon;
+  final String description;
+
+  static const items = [
+    AchievementRule(
+      title: 'Ilk Seri',
+      icon: Icons.bolt,
+      description: '5 bolum bitir.',
+    ),
+    AchievementRule(
+      title: 'Yildiz Avcisi',
+      icon: Icons.star,
+      description: '30 toplam yildiz kazan.',
+    ),
+    AchievementRule(
+      title: 'Usta Seri',
+      icon: Icons.local_fire_department,
+      description: '8 seri yakala.',
+    ),
+    AchievementRule(
+      title: 'Koleksiyoncu',
+      icon: Icons.palette,
+      description: '3 kozmetik ac.',
+    ),
+    AchievementRule(
+      title: 'Temiz Atis',
+      icon: Icons.sports_basketball,
+      description: 'Mukemmel basket at.',
+    ),
+  ];
+
+  static int updatedMask({
+    required int currentMask,
+    required int totalWins,
+    required int totalStars,
+    required int bestStreak,
+    required int ownedSkins,
+    required GameRun run,
+  }) {
+    var mask = currentMask;
+    final checks = [
+      totalWins >= 5,
+      totalStars >= 30,
+      bestStreak >= 8,
+      ownedSkins >= 3,
+      run.perfectShot,
+    ];
+    for (var i = 0; i < checks.length; i++) {
+      if (checks[i]) mask |= 1 << i;
+    }
+    return mask;
+  }
+
+  static int completedCount(int mask) {
+    var count = 0;
+    for (var i = 0; i < items.length; i++) {
+      if (mask & (1 << i) != 0) count++;
+    }
+    return count;
+  }
 }
 
 class PlayerLeague {
@@ -3661,6 +4011,7 @@ class _ArenaScreenState extends State<ArenaScreen>
                             : GameBoard(
                               run: run,
                               skin: BallSkin.classic,
+                              courtTheme: CourtTheme.classic,
                               onNudge:
                                   (force) => setState(() => run.nudge(force)),
                               onAim: (force) => setState(() => run.aim(force)),
@@ -3743,8 +4094,12 @@ class StoreScreen extends StatelessWidget {
     required this.premium,
     required this.activeSkin,
     required this.ownedSkins,
+    required this.activeCourtTheme,
+    required this.ownedCourtThemes,
     required this.onEquipSkin,
     required this.onBuySkin,
+    required this.onEquipCourtTheme,
+    required this.onBuyCourtTheme,
     required this.onBuyJokerPack,
     required this.onActivatePremium,
     required this.onBack,
@@ -3754,8 +4109,12 @@ class StoreScreen extends StatelessWidget {
   final bool premium;
   final BallSkin activeSkin;
   final Set<BallSkin> ownedSkins;
+  final CourtTheme activeCourtTheme;
+  final Set<CourtTheme> ownedCourtThemes;
   final ValueChanged<BallSkin> onEquipSkin;
   final ValueChanged<BallSkin> onBuySkin;
+  final ValueChanged<CourtTheme> onEquipCourtTheme;
+  final ValueChanged<CourtTheme> onBuyCourtTheme;
   final ValueChanged<PowerUpKind> onBuyJokerPack;
   final VoidCallback onActivatePremium;
   final VoidCallback onBack;
@@ -3840,7 +4199,113 @@ class StoreScreen extends StatelessWidget {
             ),
           ),
         ),
+        const SizedBox(height: 18),
+        Text(
+          'Saha Temalari',
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 10),
+        ...CourtTheme.values.map(
+          (theme) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: CourtThemeOffer(
+              theme: theme,
+              owned: ownedCourtThemes.contains(theme),
+              active: activeCourtTheme == theme,
+              coins: coins,
+              onEquip: () => onEquipCourtTheme(theme),
+              onBuy: () => onBuyCourtTheme(theme),
+            ),
+          ),
+        ),
       ],
+    );
+  }
+}
+
+class CourtThemeOffer extends StatelessWidget {
+  const CourtThemeOffer({
+    super.key,
+    required this.theme,
+    required this.owned,
+    required this.active,
+    required this.coins,
+    required this.onEquip,
+    required this.onBuy,
+  });
+
+  final CourtTheme theme;
+  final bool owned;
+  final bool active;
+  final int coins;
+  final VoidCallback onEquip;
+  final VoidCallback onBuy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xff111827),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: active ? theme.accent : Colors.white.withValues(alpha: 0.12),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 58,
+            height: 42,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [theme.top, theme.mid, theme.bottom],
+              ),
+              border: Border.all(color: theme.line.withValues(alpha: 0.55)),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  theme.title,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                Text(
+                  theme == CourtTheme.classic
+                      ? 'Varsayilan saha.'
+                      : '${theme.price} coin ile acilir.',
+                  style: const TextStyle(color: Colors.white70),
+                ),
+              ],
+            ),
+          ),
+          FilledButton.tonal(
+            onPressed:
+                active
+                    ? null
+                    : owned
+                    ? onEquip
+                    : coins >= theme.price
+                    ? onBuy
+                    : null,
+            child: Text(
+              active
+                  ? 'Aktif'
+                  : owned
+                  ? 'Sec'
+                  : '${theme.price}c',
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -4191,6 +4656,8 @@ class AccountScreen extends StatefulWidget {
     required this.currentStreak,
     required this.totalStars,
     required this.totalWins,
+    required this.lives,
+    required this.achievementMask,
     required this.activeSkin,
     required this.onSignOut,
     required this.onChanged,
@@ -4208,6 +4675,8 @@ class AccountScreen extends StatefulWidget {
   final int currentStreak;
   final int totalStars;
   final int totalWins;
+  final int lives;
+  final int achievementMask;
   final BallSkin activeSkin;
   final Future<void> Function() onSignOut;
   final ValueChanged<String> onChanged;
@@ -4411,10 +4880,19 @@ class _AccountScreenState extends State<AccountScreen> {
                 runSpacing: 8,
                 children: [
                   _ProfileStat(label: 'Coin', value: '${widget.coins}'),
+                  _ProfileStat(
+                    label: 'Can',
+                    value: '${widget.lives}/${GameEconomy.maxLives}',
+                  ),
                   _ProfileStat(label: 'Yildiz', value: '${widget.totalStars}'),
                   _ProfileStat(label: 'Bitis', value: '${widget.totalWins}'),
                   _ProfileStat(label: 'Seri', value: '${widget.currentStreak}'),
                   _ProfileStat(label: 'En iyi', value: '${widget.bestStreak}'),
+                  _ProfileStat(
+                    label: 'Rozet',
+                    value:
+                        '${AchievementRule.completedCount(widget.achievementMask)}',
+                  ),
                 ],
               ),
             ],
@@ -4495,6 +4973,7 @@ class GameBoard extends StatefulWidget {
     super.key,
     required this.run,
     required this.skin,
+    required this.courtTheme,
     required this.onNudge,
     required this.onAim,
     required this.onShoot,
@@ -4503,6 +4982,7 @@ class GameBoard extends StatefulWidget {
 
   final GameRun run;
   final BallSkin skin;
+  final CourtTheme courtTheme;
   final ValueChanged<Offset> onNudge;
   final ValueChanged<Offset> onAim;
   final ValueChanged<Offset> onShoot;
@@ -4566,7 +5046,7 @@ class _GameBoardState extends State<GameBoard> {
             );
           },
           child: CustomPaint(
-            painter: GamePainter(widget.run, widget.skin),
+            painter: GamePainter(widget.run, widget.skin, widget.courtTheme),
             child: const SizedBox.expand(),
           ),
         );
@@ -4576,10 +5056,11 @@ class _GameBoardState extends State<GameBoard> {
 }
 
 class GamePainter extends CustomPainter {
-  GamePainter(this.run, this.skin);
+  GamePainter(this.run, this.skin, this.courtTheme);
 
   final GameRun run;
   final BallSkin skin;
+  final CourtTheme courtTheme;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -4588,7 +5069,7 @@ class GamePainter extends CustomPainter {
       const Radius.circular(8),
     );
     final pulse = run.elapsed.inMilliseconds / 1000;
-    _drawArenaCourt(canvas, size, board, pulse);
+    _drawArenaCourt(canvas, size, board, pulse, courtTheme);
     if (run.impactPulse > 0) {
       canvas.drawRRect(
         board.deflate(2),
@@ -4983,14 +5464,20 @@ class GamePainter extends CustomPainter {
     _text(canvas, Offset(x + 50, y + 25), value, 12, color, FontWeight.w900);
   }
 
-  void _drawArenaCourt(Canvas canvas, Size size, RRect board, double pulse) {
+  void _drawArenaCourt(
+    Canvas canvas,
+    Size size,
+    RRect board,
+    double pulse,
+    CourtTheme theme,
+  ) {
     canvas.drawRRect(
       board,
       Paint()
-        ..shader = const LinearGradient(
+        ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xffb9793c), Color(0xff8d5427), Color(0xff5b3217)],
+          colors: [theme.top, theme.mid, theme.bottom],
         ).createShader(Offset.zero & size),
     );
 
@@ -5003,9 +5490,7 @@ class GamePainter extends CustomPainter {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(
-                0xffffc072,
-              ).withValues(alpha: x % 2 == 0 ? 0.20 : 0.08),
+              theme.line.withValues(alpha: x % 2 == 0 ? 0.18 : 0.07),
               Colors.black.withValues(alpha: x % 2 == 0 ? 0.04 : 0.12),
             ],
           ).createShader(rect),
@@ -5029,10 +5514,7 @@ class GamePainter extends CustomPainter {
         size.width * (0.18 + i * 0.025),
         Paint()
           ..shader = RadialGradient(
-            colors: [
-              const Color(0xfffff1c7).withValues(alpha: 0.13),
-              Colors.transparent,
-            ],
+            colors: [theme.accent.withValues(alpha: 0.13), Colors.transparent],
           ).createShader(
             Rect.fromCircle(center: Offset(x, y), radius: size.width * 0.25),
           ),
@@ -5041,7 +5523,7 @@ class GamePainter extends CustomPainter {
 
     final courtLine =
         Paint()
-          ..color = Colors.white.withValues(alpha: 0.40)
+          ..color = theme.line.withValues(alpha: 0.42)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2.2
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.4);
@@ -6877,6 +7359,12 @@ class GameBackend {
     final localTotalStars = prefs.getInt('total_stars_$uid') ?? 0;
     final localTotalWins = prefs.getInt('total_wins_$uid') ?? 0;
     final localLoginRewardKey = prefs.getString('login_reward_$uid') ?? '';
+    final localLivesRaw = prefs.getInt('lives_$uid') ?? GameEconomy.maxLives;
+    final localLastLifeRefill =
+        prefs.getString('life_refill_$uid') ?? DateTime.now().toIso8601String();
+    final localLives = _refilledLives(localLivesRaw, localLastLifeRefill);
+    final localAchievementMask = prefs.getInt('achievement_mask_$uid') ?? 0;
+    final localSeasonRewardKey = prefs.getString('season_reward_$uid') ?? '';
     final localActiveSkin = BallSkin.fromId(
       prefs.getString('active_skin_$uid'),
     );
@@ -6885,6 +7373,14 @@ class GameBackend {
             .map(BallSkin.fromId)
             .toSet()
           ..add(BallSkin.classic);
+    final localActiveCourtTheme = CourtTheme.fromId(
+      prefs.getString('active_court_$uid'),
+    );
+    final localOwnedCourtThemes =
+        (prefs.getStringList('owned_courts_$uid') ?? [CourtTheme.classic.id])
+            .map(CourtTheme.fromId)
+            .toSet()
+          ..add(CourtTheme.classic);
     if (!_canSync(uid)) {
       return GameEconomy(
         coins: localCoins,
@@ -6903,11 +7399,20 @@ class GameBackend {
         totalStars: localTotalStars,
         totalWins: localTotalWins,
         lastLoginRewardKey: localLoginRewardKey,
+        lives: localLives,
+        lastLifeRefillIso: localLastLifeRefill,
+        achievementMask: localAchievementMask,
+        seasonRewardKey: localSeasonRewardKey,
         activeSkin:
             localOwnedSkins.contains(localActiveSkin)
                 ? localActiveSkin
                 : BallSkin.classic,
         ownedSkins: localOwnedSkins,
+        activeCourtTheme:
+            localOwnedCourtThemes.contains(localActiveCourtTheme)
+                ? localActiveCourtTheme
+                : CourtTheme.classic,
+        ownedCourtThemes: localOwnedCourtThemes,
       );
     }
     try {
@@ -6942,6 +7447,16 @@ class GameBackend {
       final totalWins = data['totalWins'] as int? ?? localTotalWins;
       final loginRewardKey =
           data['lastLoginRewardKey'] as String? ?? localLoginRewardKey;
+      final lives = _refilledLives(
+        data['lives'] as int? ?? localLives,
+        data['lastLifeRefillIso'] as String? ?? localLastLifeRefill,
+      );
+      final lastLifeRefillIso =
+          data['lastLifeRefillIso'] as String? ?? localLastLifeRefill;
+      final achievementMask =
+          data['achievementMask'] as int? ?? localAchievementMask;
+      final seasonRewardKey =
+          data['seasonRewardKey'] as String? ?? localSeasonRewardKey;
       final ownedSkins =
           ((data['ownedSkins'] as List?)?.whereType<String>().toList() ??
                   localOwnedSkins.map((item) => item.id).toList())
@@ -6949,6 +7464,15 @@ class GameBackend {
               .toSet()
             ..add(BallSkin.classic);
       final activeSkin = BallSkin.fromId(data['activeSkin'] as String?);
+      final ownedCourtThemes =
+          ((data['ownedCourtThemes'] as List?)?.whereType<String>().toList() ??
+                  localOwnedCourtThemes.map((item) => item.id).toList())
+              .map(CourtTheme.fromId)
+              .toSet()
+            ..add(CourtTheme.classic);
+      final activeCourtTheme = CourtTheme.fromId(
+        data['activeCourtTheme'] as String?,
+      );
       await prefs.setInt('coins_$uid', coins);
       await prefs.setBool('premium_$uid', premium);
       await prefs.setInt('route_jokers_$uid', routeJokers);
@@ -6965,6 +7489,10 @@ class GameBackend {
       await prefs.setInt('total_stars_$uid', totalStars);
       await prefs.setInt('total_wins_$uid', totalWins);
       await prefs.setString('login_reward_$uid', loginRewardKey);
+      await prefs.setInt('lives_$uid', lives);
+      await prefs.setString('life_refill_$uid', lastLifeRefillIso);
+      await prefs.setInt('achievement_mask_$uid', achievementMask);
+      await prefs.setString('season_reward_$uid', seasonRewardKey);
       await prefs.setString(
         'active_skin_$uid',
         ownedSkins.contains(activeSkin) ? activeSkin.id : BallSkin.classic.id,
@@ -6972,6 +7500,16 @@ class GameBackend {
       await prefs.setStringList(
         'owned_skins_$uid',
         ownedSkins.map((item) => item.id).toList(),
+      );
+      await prefs.setString(
+        'active_court_$uid',
+        ownedCourtThemes.contains(activeCourtTheme)
+            ? activeCourtTheme.id
+            : CourtTheme.classic.id,
+      );
+      await prefs.setStringList(
+        'owned_courts_$uid',
+        ownedCourtThemes.map((item) => item.id).toList(),
       );
       return GameEconomy(
         coins: coins,
@@ -6990,9 +7528,18 @@ class GameBackend {
         totalStars: totalStars,
         totalWins: totalWins,
         lastLoginRewardKey: loginRewardKey,
+        lives: lives,
+        lastLifeRefillIso: lastLifeRefillIso,
+        achievementMask: achievementMask,
+        seasonRewardKey: seasonRewardKey,
         activeSkin:
             ownedSkins.contains(activeSkin) ? activeSkin : BallSkin.classic,
         ownedSkins: ownedSkins,
+        activeCourtTheme:
+            ownedCourtThemes.contains(activeCourtTheme)
+                ? activeCourtTheme
+                : CourtTheme.classic,
+        ownedCourtThemes: ownedCourtThemes,
       );
     } catch (_) {
       return GameEconomy(
@@ -7012,13 +7559,31 @@ class GameBackend {
         totalStars: localTotalStars,
         totalWins: localTotalWins,
         lastLoginRewardKey: localLoginRewardKey,
+        lives: localLives,
+        lastLifeRefillIso: localLastLifeRefill,
+        achievementMask: localAchievementMask,
+        seasonRewardKey: localSeasonRewardKey,
         activeSkin:
             localOwnedSkins.contains(localActiveSkin)
                 ? localActiveSkin
                 : BallSkin.classic,
         ownedSkins: localOwnedSkins,
+        activeCourtTheme:
+            localOwnedCourtThemes.contains(localActiveCourtTheme)
+                ? localActiveCourtTheme
+                : CourtTheme.classic,
+        ownedCourtThemes: localOwnedCourtThemes,
       );
     }
+  }
+
+  int _refilledLives(int lives, String lastIso) {
+    if (lives >= GameEconomy.maxLives) return GameEconomy.maxLives;
+    final last = DateTime.tryParse(lastIso) ?? DateTime.now();
+    final gained =
+        DateTime.now().difference(last).inMinutes ~/
+        GameEconomy.lifeRefillMinutes;
+    return math.min(GameEconomy.maxLives, lives + math.max(0, gained));
   }
 
   Future<void> saveEconomy(
@@ -7039,14 +7604,29 @@ class GameBackend {
     required int totalStars,
     required int totalWins,
     required String lastLoginRewardKey,
+    required int lives,
+    required String lastLifeRefillIso,
+    required int achievementMask,
+    required String seasonRewardKey,
     required BallSkin activeSkin,
     required Set<BallSkin> ownedSkins,
+    required CourtTheme activeCourtTheme,
+    required Set<CourtTheme> ownedCourtThemes,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final safeOwned = {...ownedSkins, BallSkin.classic};
     final safeActive =
         safeOwned.contains(activeSkin) ? activeSkin : BallSkin.classic;
+    final safeOwnedCourt = {...ownedCourtThemes, CourtTheme.classic};
+    final safeActiveCourt =
+        safeOwnedCourt.contains(activeCourtTheme)
+            ? activeCourtTheme
+            : CourtTheme.classic;
     final key = dailyKey ?? DailyQuest.todayKey();
+    final lifeRefill =
+        lives >= GameEconomy.maxLives || lastLifeRefillIso.isEmpty
+            ? DateTime.now().toIso8601String()
+            : lastLifeRefillIso;
     await prefs.setInt('coins_$uid', coins);
     await prefs.setBool('premium_$uid', premium);
     await prefs.setInt('route_jokers_$uid', routeJokers);
@@ -7063,10 +7643,19 @@ class GameBackend {
     await prefs.setInt('total_stars_$uid', totalStars);
     await prefs.setInt('total_wins_$uid', totalWins);
     await prefs.setString('login_reward_$uid', lastLoginRewardKey);
+    await prefs.setInt('lives_$uid', lives);
+    await prefs.setString('life_refill_$uid', lifeRefill);
+    await prefs.setInt('achievement_mask_$uid', achievementMask);
+    await prefs.setString('season_reward_$uid', seasonRewardKey);
     await prefs.setString('active_skin_$uid', safeActive.id);
     await prefs.setStringList(
       'owned_skins_$uid',
       safeOwned.map((item) => item.id).toList(),
+    );
+    await prefs.setString('active_court_$uid', safeActiveCourt.id);
+    await prefs.setStringList(
+      'owned_courts_$uid',
+      safeOwnedCourt.map((item) => item.id).toList(),
     );
     if (!_canSync(uid)) return;
     await FirebaseFirestore.instance.collection('users').doc(uid).set({
@@ -7086,8 +7675,14 @@ class GameBackend {
       'totalStars': totalStars,
       'totalWins': totalWins,
       'lastLoginRewardKey': lastLoginRewardKey,
+      'lives': lives,
+      'lastLifeRefillIso': lifeRefill,
+      'achievementMask': achievementMask,
+      'seasonRewardKey': seasonRewardKey,
       'activeSkin': safeActive.id,
       'ownedSkins': safeOwned.map((item) => item.id).toList(),
+      'activeCourtTheme': safeActiveCourt.id,
+      'ownedCourtThemes': safeOwnedCourt.map((item) => item.id).toList(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
@@ -7204,6 +7799,30 @@ class GameBackend {
       }, SetOptions(merge: true));
     }
     await batch.commit();
+  }
+
+  Future<void> submitLevelTelemetry({
+    required GameLevel level,
+    required GameRun run,
+  }) async {
+    if (!_canSync()) return;
+    try {
+      await FirebaseFirestore.instance.collection('levelTelemetry').add({
+        'uid': uid,
+        'levelIndex': level.index,
+        'level': level.name,
+        'won': run.won,
+        'failed': run.failed,
+        'stars': run.starRating,
+        'moves': run.moves,
+        'nudges': run.nudges,
+        'coins': run.collectedCoins,
+        'durationMs': run.elapsed.inMilliseconds,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {
+      // Telemetry is best-effort and must never interrupt gameplay.
+    }
   }
 
   Stream<List<LeaderboardEntry>> watchLeaderboard({
@@ -7330,9 +7949,18 @@ class GameEconomy {
     required this.totalStars,
     required this.totalWins,
     required this.lastLoginRewardKey,
+    required this.lives,
+    required this.lastLifeRefillIso,
+    required this.achievementMask,
+    required this.seasonRewardKey,
     required this.activeSkin,
     required this.ownedSkins,
+    required this.activeCourtTheme,
+    required this.ownedCourtThemes,
   });
+
+  static const maxLives = 5;
+  static const lifeRefillMinutes = 25;
 
   final int coins;
   final bool premium;
@@ -7350,8 +7978,14 @@ class GameEconomy {
   final int totalStars;
   final int totalWins;
   final String lastLoginRewardKey;
+  final int lives;
+  final String lastLifeRefillIso;
+  final int achievementMask;
+  final String seasonRewardKey;
   final BallSkin activeSkin;
   final Set<BallSkin> ownedSkins;
+  final CourtTheme activeCourtTheme;
+  final Set<CourtTheme> ownedCourtThemes;
 }
 
 class ArenaRoom {

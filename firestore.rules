@@ -18,8 +18,9 @@ service cloud.firestore {
           'routeJokers', 'breakerJokers', 'keyJokers', 'seasonXp',
           'dailyKey', 'dailyWins', 'dailyBonusCoins', 'dailyStars',
           'dailyClaimMask', 'bestStreak', 'currentStreak', 'activeSkin',
-          'totalStars', 'totalWins', 'lastLoginRewardKey', 'ownedSkins',
-          'updatedAt'
+          'totalStars', 'totalWins', 'lastLoginRewardKey', 'lives',
+          'lastLifeRefillIso', 'achievementMask', 'seasonRewardKey',
+          'ownedSkins', 'activeCourtTheme', 'ownedCourtThemes', 'updatedAt'
         ]);
       allow delete: if owns(uid);
     }
@@ -85,6 +86,16 @@ service cloud.firestore {
           resource.data.hostUid == request.auth.uid
           || resource.data.guestUid == request.auth.uid
         );
+    }
+
+    match /levelTelemetry/{entryId} {
+      allow read: if false;
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'uid', 'levelIndex', 'level', 'won', 'failed', 'stars', 'moves',
+          'nudges', 'coins', 'durationMs', 'createdAt'
+        ]);
     }
   }
 }
