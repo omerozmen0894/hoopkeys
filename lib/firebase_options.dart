@@ -37,11 +37,11 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCSHQBXOXxzI2uwjcw-NSwBZiFWrljyIYw',
-    appId: '1:265813124433:android:b3fe586242974bea27df70',
-    messagingSenderId: '265813124433',
-    projectId: 'tap-drop-arena-omer',
-    storageBucket: 'tap-drop-arena-omer.firebasestorage.app',
+    apiKey: 'AIzaSyByJxmvNttkktnihW8n7oMzYwaFfFRvuBs',
+    appId: '1:931838852481:android:1e8f377540e6630a4fbc80',
+    messagingSenderId: '931838852481',
+    projectId: 'hoop-keys',
+    storageBucket: 'hoop-keys.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(

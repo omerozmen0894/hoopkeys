@@ -1,4 +1,55 @@
 workflows:
+  android-google-play:
+    name: Hoop Keys Android Google Play
+    max_build_duration: 120
+    environment:
+      groups:
+        - android_signing
+      flutter: stable
+      java: 17
+    scripts:
+      - name: Verify Android Firebase app
+        script: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('android/app/google-services.json')
+          if not path.is_file():
+              raise SystemExit('Missing Android Firebase configuration: android/app/google-services.json')
+          config = json.loads(path.read_text(encoding='utf-8'))
+          packages = {
+              client['client_info']['android_client_info']['package_name']
+              for client in config.get('client', [])
+          }
+          if config['project_info']['project_id'] != 'hoop-keys' or 'com.omergames.hoopkeys' not in packages:
+              raise SystemExit('Register com.omergames.hoopkeys in the hoop-keys Firebase project and replace google-services.json')
+          PY
+      - name: Restore upload signing key
+        script: |
+          set -e
+          : "${CM_KEYSTORE_B64:?Missing CM_KEYSTORE_B64 in android_signing}"
+          : "${CM_KEY_ALIAS:?Missing CM_KEY_ALIAS in android_signing}"
+          : "${CM_KEY_PASSWORD:?Missing CM_KEY_PASSWORD in android_signing}"
+          : "${CM_STORE_PASSWORD:?Missing CM_STORE_PASSWORD in android_signing}"
+          echo "$CM_KEYSTORE_B64" | base64 --decode > android/app/upload-keystore.jks
+          cat > android/key.properties <<EOF
+          storeFile=upload-keystore.jks
+          storePassword=$CM_STORE_PASSWORD
+          keyAlias=$CM_KEY_ALIAS
+          keyPassword=$CM_KEY_PASSWORD
+          EOF
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Flutter analyze
+        script: flutter analyze
+      - name: Flutter tests
+        script: flutter test
+      - name: Build signed Android App Bundle
+        script: flutter build appbundle --release
+    artifacts:
+      - build/app/outputs/bundle/release/*.aab
+
   ios-app-store:
     name: Hoop Keys iOS App Store
     max_build_duration: 120

@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "265813124433",
-    "project_id": "tap-drop-arena-omer",
-    "storage_bucket": "tap-drop-arena-omer.firebasestorage.app"
+    "project_number": "931838852481",
+    "project_id": "hoop-keys",
+    "storage_bucket": "hoop-keys.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:265813124433:android:b3fe586242974bea27df70",
+        "mobilesdk_app_id": "1:931838852481:android:1e8f377540e6630a4fbc80",
         "android_client_info": {
-          "package_name": "com.omergames.tapdroparena"
+          "package_name": "com.omergames.hoopkeys"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyCSHQBXOXxzI2uwjcw-NSwBZiFWrljyIYw"
+          "current_key": "AIzaSyByJxmvNttkktnihW8n7oMzYwaFfFRvuBs"
         }
       ],
       "services": {
