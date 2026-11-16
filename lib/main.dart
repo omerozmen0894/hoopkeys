@@ -8291,6 +8291,9 @@ class GameBackend {
       firestore.collectionGroup('entries').where('uid', isEqualTo: uid),
     );
     await _deleteQuery(
+      firestore.collection('levelTelemetry').where('uid', isEqualTo: uid),
+    );
+    await _deleteQuery(
       firestore.collection('arenaRooms').where('hostUid', isEqualTo: uid),
     );
     await _deleteQuery(

@@ -90,13 +90,14 @@ service cloud.firestore {
     }
 
     match /levelTelemetry/{entryId} {
-      allow read: if false;
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.keys().hasOnly([
           'uid', 'levelIndex', 'level', 'won', 'failed', 'stars', 'moves',
           'nudges', 'coins', 'durationMs', 'createdAt'
         ]);
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
   }
 }
